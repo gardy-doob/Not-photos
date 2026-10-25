@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_launcher_name">圖庫</string>
+    <string name="app_launcher_name">Not Photos</string>
     <string name="edit">編輯</string>
     <string name="open_camera">開啟相機</string>
     <string name="hidden">（已隱藏）</string>
