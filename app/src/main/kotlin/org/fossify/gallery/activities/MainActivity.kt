@@ -113,6 +113,14 @@ import org.fossify.gallery.extensions.storeDirectoryItems
 import org.fossify.gallery.extensions.tryDeleteFileDirItem
 import org.fossify.gallery.extensions.updateDBDirectory
 import org.fossify.gallery.helpers.DIRECTORY
+import org.fossify.gallery.helpers.NP_FORCE_SHOW_ALL
+import org.fossify.gallery.helpers.NP_ONLY_VIDEOS
+import org.fossify.gallery.helpers.NP_TAB
+import org.fossify.gallery.helpers.NP_TAB_ALL
+import org.fossify.gallery.helpers.NP_TAB_FOLDERS
+import org.fossify.gallery.helpers.NP_TAB_GALLERY
+import org.fossify.gallery.helpers.NP_TAB_VIDEOS
+import org.fossify.gallery.helpers.NpNav
 import org.fossify.gallery.helpers.GET_ANY_INTENT
 import org.fossify.gallery.helpers.GET_IMAGE_INTENT
 import org.fossify.gallery.helpers.GET_VIDEO_INTENT
@@ -166,6 +174,7 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
     private var mIsSetWallpaperIntent = false
     private var mAllowPickingMultiple = false
     private var mIsThirdPartyIntent = false
+    private var npFoldersMode = false
     private var mIsGettingDirs = false
     private var mLoadedInitialPhotos = false
     private var mShouldStopFetching = false
@@ -230,8 +239,18 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
         refreshMenuItems()
 
         setupEdgeToEdge(
-            padBottomImeAndSystem = listOf(binding.directoriesGrid)
+            padBottomImeAndSystem = listOf(binding.directoriesGrid),
+            moveBottomSystem = listOf(binding.npNav.root)
         )
+
+        npFoldersMode = intent.getStringExtra(NP_TAB) == NP_TAB_FOLDERS
+        if (mIsThirdPartyIntent) {
+            NpNav.hide(this)
+        } else {
+            NpNav.setup(this, NP_TAB_FOLDERS) {
+                binding.directoriesGrid.smoothScrollToPosition(0)
+            }
+        }
 
         binding.directoriesRefreshLayout.setOnRefreshListener { getDirectories() }
         storeStateVariables()
@@ -389,6 +408,9 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
     override fun onBackPressedCompat(): Boolean {
         return if (binding.mainMenu.isSearchOpen) {
             binding.mainMenu.closeSearch()
+            true
+        } else if (!mIsThirdPartyIntent && !(config.groupDirectSubfolders && mCurrentPathPrefix.isNotEmpty())) {
+            NpNav.go(this, NP_TAB_GALLERY)
             true
         } else if (config.groupDirectSubfolders) {
             if (mCurrentPathPrefix.isEmpty()) {
@@ -1392,19 +1414,29 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
     }
 
     private fun openDefaultFolder() {
-        if (config.defaultFolder.isEmpty()) {
+        if (npFoldersMode) {
             return
         }
 
-        val defaultDir = File(config.defaultFolder)
+        // Not Photos : on démarre toujours sur la Galerie (DCIM/Camera), sauf dossier par défaut choisi
+        val cameraPath = NpNav.cameraPath(this)
+        val target = config.defaultFolder.ifEmpty { cameraPath }
+        if (target.isEmpty()) {
+            return
+        }
 
-        if ((!defaultDir.exists() || !defaultDir.isDirectory) && (config.defaultFolder != RECYCLE_BIN && config.defaultFolder != FAVORITES)) {
-            config.defaultFolder = ""
+        val defaultDir = File(target)
+
+        if ((!defaultDir.exists() || !defaultDir.isDirectory) && (target != RECYCLE_BIN && target != FAVORITES)) {
+            if (config.defaultFolder.isNotEmpty()) {
+                config.defaultFolder = ""
+            }
             return
         }
 
         Intent(this, MediaActivity::class.java).apply {
-            putExtra(DIRECTORY, config.defaultFolder)
+            putExtra(DIRECTORY, target)
+            putExtra(NP_TAB, if (target == cameraPath) NP_TAB_GALLERY else NP_TAB_FOLDERS)
             handleMediaIntent(this)
         }
     }

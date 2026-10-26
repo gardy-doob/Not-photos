@@ -86,6 +86,14 @@ import org.fossify.gallery.extensions.showRecycleBinEmptyingDialog
 import org.fossify.gallery.extensions.showRestoreConfirmationDialog
 import org.fossify.gallery.extensions.tryDeleteFileDirItem
 import org.fossify.gallery.helpers.DIRECTORY
+import org.fossify.gallery.helpers.NP_FORCE_SHOW_ALL
+import org.fossify.gallery.helpers.NP_ONLY_VIDEOS
+import org.fossify.gallery.helpers.NP_TAB
+import org.fossify.gallery.helpers.NP_TAB_ALL
+import org.fossify.gallery.helpers.NP_TAB_FOLDERS
+import org.fossify.gallery.helpers.NP_TAB_GALLERY
+import org.fossify.gallery.helpers.NP_TAB_VIDEOS
+import org.fossify.gallery.helpers.NpNav
 import org.fossify.gallery.helpers.GET_ANY_INTENT
 import org.fossify.gallery.helpers.GET_IMAGE_INTENT
 import org.fossify.gallery.helpers.GET_VIDEO_INTENT
@@ -124,6 +132,9 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
     private var mIsGettingMedia = false
     private var mAllowPickingMultiple = false
     private var mShowAll = false
+    private var npTab = NP_TAB_FOLDERS
+    private var npOnlyVideos = false
+    private var npForceShowAll = false
     private var mLoadedInitialPhotos = false
     private var mShowLoadingIndicator = true
     private var mWasFullscreenViewOpen = false
@@ -160,6 +171,9 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
             mIsGetVideoIntent = getBooleanExtra(GET_VIDEO_INTENT, false)
             mIsGetAnyIntent = getBooleanExtra(GET_ANY_INTENT, false)
             mAllowPickingMultiple = getBooleanExtra(Intent.EXTRA_ALLOW_MULTIPLE, false)
+            npOnlyVideos = getBooleanExtra(NP_ONLY_VIDEOS, false)
+            npForceShowAll = getBooleanExtra(NP_FORCE_SHOW_ALL, false)
+            npTab = getStringExtra(NP_TAB) ?: NP_TAB_FOLDERS
         }
 
         binding.mediaRefreshLayout.setOnRefreshListener { getMedia() }
@@ -176,8 +190,17 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
         storeStateVariables()
         setupEdgeToEdge(
             padTopSystem = listOf(binding.mediaMenu),
-            padBottomImeAndSystem = listOf(binding.mediaGrid)
+            padBottomImeAndSystem = listOf(binding.mediaGrid),
+            moveBottomSystem = listOf(binding.npNav.root)
         )
+
+        if (mIsGetImageIntent || mIsGetVideoIntent || mIsGetAnyIntent) {
+            NpNav.hide(this)
+        } else {
+            NpNav.setup(this, npTab) {
+                binding.mediaGrid.smoothScrollToPosition(0)
+            }
+        }
 
         if (mShowAll) {
             registerFileUpdateListener()
@@ -312,7 +335,19 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
                 appLockManager.lock()
             }
 
-            false
+            when (npTab) {
+                NP_TAB_GALLERY -> {
+                    finishAffinity()
+                    true
+                }
+
+                NP_TAB_VIDEOS, NP_TAB_ALL -> {
+                    NpNav.go(this, NP_TAB_GALLERY)
+                    true
+                }
+
+                else -> false
+            }
         }
     }
 
@@ -425,7 +460,7 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
             mStoredMarkFavoriteItems = markFavoriteItems
             mStoredThumbnailSpacing = thumbnailSpacing
             mStoredRoundedCorners = fileRoundedCorners
-            mShowAll = showAll && mPath != RECYCLE_BIN
+            mShowAll = (showAll || npForceShowAll) && mPath != RECYCLE_BIN
         }
     }
 
@@ -661,8 +696,8 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
         } else {
             getCachedMedia(
                 mPath,
-                mIsGetVideoIntent && !mIsGetImageIntent,
-                mIsGetImageIntent && !mIsGetVideoIntent
+                (mIsGetVideoIntent && !mIsGetImageIntent) || npOnlyVideos,
+                mIsGetImageIntent && !mIsGetVideoIntent && !npOnlyVideos
             ) {
                 if (it.isEmpty()) {
                     runOnUiThread {
@@ -683,8 +718,8 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
         mCurrAsyncTask = GetMediaAsynctask(
             context = applicationContext,
             mPath = mPath,
-            isPickImage = mIsGetImageIntent && !mIsGetVideoIntent,
-            isPickVideo = mIsGetVideoIntent && !mIsGetImageIntent,
+            isPickImage = mIsGetImageIntent && !mIsGetVideoIntent && !npOnlyVideos,
+            isPickVideo = (mIsGetVideoIntent && !mIsGetImageIntent) || npOnlyVideos,
             showAll = mShowAll
         ) {
             ensureBackgroundThread {

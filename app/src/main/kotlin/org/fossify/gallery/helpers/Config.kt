@@ -414,7 +414,7 @@ class Config(context: Context) : BaseConfig(context) {
         set(wasSVGShowingHandled) = prefs.edit().putBoolean(WAS_SVG_SHOWING_HANDLED, wasSVGShowingHandled).apply()
 
     var groupBy: Int
-        get() = prefs.getInt(GROUP_BY, GROUP_BY_NONE)
+        get() = prefs.getInt(GROUP_BY, GROUP_BY_DATE_TAKEN_DAILY or GROUP_DESCENDING)
         set(groupBy) = prefs.edit().putInt(GROUP_BY, groupBy).apply()
 
     var useRecycleBin: Boolean

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="np_gallery">Galerie</string>
+    <string name="np_videos">Vidéos</string>
+    <string name="np_jalons">Jalons</string>
+    <string name="np_all">Toutes</string>
+    <string name="np_folders">Dossiers</string>
+    <string name="np_coming_soon">Bientôt disponible</string>
+    <string name="np_jalons_empty">Les jalons arrivent bientôt : double tap ou appui long sur une photo de la Galerie pour en créer un.</string>
+</resources>
