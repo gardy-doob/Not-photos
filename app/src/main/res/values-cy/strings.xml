@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="share_resized">Rhannu fersiwn wedi\'i ailfeintio</string>
-    <string name="app_launcher_name">Not Photos</string>
+    <string name="app_launcher_name">Aura</string>
     <string name="edit">Golygu</string>
     <string name="open_camera">Agor y camera</string>
     <string name="hidden">(cudd)</string>

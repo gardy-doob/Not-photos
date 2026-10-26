@@ -9,7 +9,7 @@ import org.fossify.gallery.R
 
 /** Renommer ou retirer un jalon. */
 object NpJalonDialog {
-    fun show(activity: Activity, cutPath: String, onChanged: () -> Unit) {
+    fun show(activity: Activity, cutPath: String, allowRemove: Boolean = true, onChanged: () -> Unit) {
         val cut = NpJalons.all(activity).firstOrNull { it.path == cutPath } ?: return
         val pad = (20 * activity.resources.displayMetrics.density).toInt()
         val input = EditText(activity).apply {
@@ -23,19 +23,23 @@ object NpJalonDialog {
             addView(input)
         }
 
-        AlertDialog.Builder(activity)
-            .setTitle(R.string.np_jalon)
+        val builder = AlertDialog.Builder(activity)
+            .setTitle(if (cut.name.isEmpty()) R.string.np_add_title else R.string.np_jalon)
             .setView(box)
             .setPositiveButton(R.string.np_save) { _, _ ->
                 NpJalons.rename(activity, cutPath, input.text.toString())
                 onChanged()
             }
-            .setNegativeButton(R.string.np_remove) { _, _ ->
+        if (allowRemove) {
+            builder.setNegativeButton(R.string.np_remove) { _, _ ->
                 NpJalons.remove(activity, cutPath)
                 Toast.makeText(activity, R.string.np_jalon_removed, Toast.LENGTH_SHORT).show()
                 onChanged()
             }
-            .setNeutralButton(R.string.np_cancel, null)
-            .show()
+            builder.setNeutralButton(R.string.np_cancel, null)
+        } else {
+            builder.setNegativeButton(R.string.np_cancel, null)
+        }
+        builder.show()
     }
 }

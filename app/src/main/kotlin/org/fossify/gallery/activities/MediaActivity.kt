@@ -5,6 +5,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.os.Bundle
 import android.os.Handler
+import android.view.View
 import android.view.ViewGroup
 import android.widget.RelativeLayout
 import androidx.core.net.toUri
@@ -21,6 +22,7 @@ import org.fossify.commons.dialogs.RadioGroupDialog
 import org.fossify.commons.extensions.appLockManager
 import org.fossify.commons.extensions.areSystemAnimationsEnabled
 import org.fossify.commons.extensions.beGone
+import org.fossify.commons.extensions.getProperBackgroundColor
 import org.fossify.commons.extensions.beVisible
 import org.fossify.commons.extensions.beVisibleIf
 import org.fossify.commons.extensions.deleteFiles
@@ -96,6 +98,10 @@ import org.fossify.gallery.helpers.NP_TAB_FOLDERS
 import org.fossify.gallery.helpers.NP_TAB_GALLERY
 import org.fossify.gallery.helpers.NP_TAB_VIDEOS
 import org.fossify.gallery.helpers.NpNav
+import org.fossify.gallery.helpers.NpBurger
+import org.fossify.gallery.helpers.NpSettings
+import org.fossify.gallery.helpers.NpJalonDecoration
+import org.fossify.gallery.helpers.NP_CASCADE
 import org.fossify.gallery.helpers.NpJalons
 import org.fossify.gallery.helpers.NpJalonDialog
 import org.fossify.gallery.helpers.NP_SCROLL_TO
@@ -142,6 +148,8 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
     private var npForceShowAll = false
     private var npScrollTo: String? = null
     private var npRawMedia = ArrayList<ThumbnailItem>()
+    private var npFocusCut: String? = null
+    private var npCascadePending = false
     private var mLoadedInitialPhotos = false
     private var mShowLoadingIndicator = true
     private var mWasFullscreenViewOpen = false
@@ -182,6 +190,7 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
             npForceShowAll = getBooleanExtra(NP_FORCE_SHOW_ALL, false)
             npTab = getStringExtra(NP_TAB) ?: NP_TAB_FOLDERS
             npScrollTo = getStringExtra(NP_SCROLL_TO)
+            npCascadePending = getBooleanExtra(NP_CASCADE, false)
         }
 
         binding.mediaRefreshLayout.setOnRefreshListener { getMedia() }
@@ -196,19 +205,25 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
         setupOptionsMenu()
         refreshMenuItems()
         storeStateVariables()
+        // Aura : interface plein écran, sans barre du haut ; les options passent dans le menu burger
+        binding.mediaMenu.beGone()
         setupEdgeToEdge(
-            padTopSystem = listOf(binding.mediaMenu),
+            padTopSystem = listOf(binding.mediaGrid, binding.npTopButtons.root, binding.npStatusScrim),
             padBottomImeAndSystem = listOf(binding.mediaGrid),
             moveBottomSystem = listOf(binding.npNav.root)
         )
+        binding.npStatusScrim.background = android.graphics.drawable.GradientDrawable(
+            android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+            intArrayOf(androidx.core.graphics.ColorUtils.setAlphaComponent(getProperBackgroundColor(), 0xE6), 0)
+        )
+        binding.npTopButtons.npBurger.setOnClickListener { npShowBurger(it) }
 
         if (mIsGetImageIntent || mIsGetVideoIntent || mIsGetAnyIntent) {
             NpNav.hide(this)
         } else {
-            NpNav.setup(this, npTab) {
-                binding.mediaGrid.smoothScrollToPosition(0)
-            }
+            npSetupNav()
         }
+        npSetupGrid()
 
         if (mShowAll) {
             registerFileUpdateListener()
@@ -225,9 +240,17 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
         mTempShowHiddenHandler.removeCallbacksAndMessages(null)
     }
 
+    private var npLastStyle = -1
+
     override fun onResume() {
         super.onResume()
         updateMenuColors()
+        val npStyle = NpSettings.style(this)
+        if (npLastStyle != -1 && npLastStyle != npStyle) {
+            npApplyGridStyle()
+            getMediaAdapter()?.notifyDataSetChanged()
+        }
+        npLastStyle = npStyle
         if (mStoredAnimateGifs != config.animateGifs) {
             getMediaAdapter()?.updateAnimateGifs(config.animateGifs)
         }
@@ -337,6 +360,12 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
     override fun onBackPressedCompat(): Boolean {
         return if (binding.mediaMenu.isSearchOpen) {
             binding.mediaMenu.closeSearch()
+            true
+        } else if (npFocusCut != null) {
+            npToggleFocus(npFocusCut!!)
+            true
+        } else if (npTab == NP_TAB_VIDEOS) {
+            npSwitchInPlace(NP_TAB_GALLERY)
             true
         } else {
             if (config.showAll) {
@@ -535,18 +564,90 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
 
     private fun getMediaAdapter() = binding.mediaGrid.adapter as? MediaAdapter
 
-    // ---------- Not Photos : jalons ----------
+    // ---------- Aura ----------
 
     fun npJalonsActive() = npTab != NP_TAB_VIDEOS && !(mIsGetImageIntent || mIsGetVideoIntent || mIsGetAnyIntent)
 
+    private fun npShowJalons() = npJalonsActive() && NpSettings.showJalons(this)
+
+    private fun npSetupNav() {
+        NpNav.setup(
+            activity = this,
+            current = npTab,
+            onReselect = { binding.mediaGrid.smoothScrollToPosition(0) },
+            onSelect = { tab -> npSwitchInPlace(tab) },
+            onToggleJalons = {
+                npFocusCut = null
+                npApplyGridStyle()
+                npRefreshJalons()
+            }
+        )
+    }
+
+    /** Galerie ↔ Vidéos sans changer d'écran : les vignettes glissent vers leur nouvelle place. */
+    private fun npSwitchInPlace(tab: String): Boolean {
+        val sameFolder = (npTab == NP_TAB_GALLERY || npTab == NP_TAB_VIDEOS) && !npForceShowAll
+        if (!sameFolder || (tab != NP_TAB_GALLERY && tab != NP_TAB_VIDEOS)) return false
+        npTab = tab
+        npOnlyVideos = tab == NP_TAB_VIDEOS
+        npFocusCut = null
+        npSetupNav()
+        npApplyGridStyle()
+        npRefreshJalons()
+        binding.mediaGrid.scrollToPosition(0)
+        return true
+    }
+
+    private fun npSetupGrid() {
+        binding.mediaGrid.itemAnimator = androidx.recyclerview.widget.DefaultItemAnimator().apply {
+            moveDuration = 420
+            addDuration = 260
+            removeDuration = 180
+            changeDuration = 180
+        }
+        binding.mediaGrid.addItemDecoration(
+            NpJalonDecoration(
+                styleOf = { NpSettings.style(this) },
+                enabled = { npShowJalons() && NpJalons.lastRanges.isNotEmpty() },
+                background = { getProperBackgroundColor() }
+            )
+        )
+        npApplyGridStyle()
+    }
+
+    /** Marges de la grille selon l'affichage des jalons (frise : place pour la ligne ; cartes : bords). */
+    private fun npApplyGridStyle() {
+        val density = resources.displayMetrics.density
+        val (start, end) = when {
+            !npShowJalons() -> 0 to 0
+            NpSettings.style(this) == NpSettings.STYLE_CARDS -> (12 * density).toInt() to (12 * density).toInt()
+            else -> (36 * density).toInt() to (6 * density).toInt()
+        }
+        binding.mediaGrid.setPaddingRelative(start, binding.mediaGrid.paddingTop, end, binding.mediaGrid.paddingBottom)
+        binding.mediaGrid.invalidateItemDecorations()
+    }
+
     private fun npDecorate(list: ArrayList<ThumbnailItem>): ArrayList<ThumbnailItem> {
-        return if (npJalonsActive()) NpJalons.decorate(this, list) else list
+        var items: List<ThumbnailItem> = list
+        if (npOnlyVideos) {
+            items = NpJalons.dropEmptySections(items.filter { it !is Medium || it.isVideo() })
+        }
+        return if (npShowJalons()) {
+            NpJalons.decorate(this, items, npFocusCut)
+        } else {
+            ArrayList(items.filterNot { it is ThumbnailSection && NpJalons.isJalonTitle(it.title) })
+        }
     }
 
     fun npCutAt(medium: Medium) {
         if (!npJalonsActive()) return
         if (NpJalons.add(this, medium)) {
             binding.mediaGrid.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+            if (!NpSettings.showJalons(this)) {
+                NpSettings.setShowJalons(this, true)
+                npSetupNav()
+                npApplyGridStyle()
+            }
             toast(getString(R.string.np_jalon_created, NpJalons.timeLabel(NpJalons.timeOf(medium))))
             npRefreshJalons()
         } else {
@@ -554,18 +655,65 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
         }
     }
 
-    fun npEditJalon(title: String) {
-        val path = NpJalons.sectionToCut[title] ?: return
-        NpJalonDialog.show(this, path) { npRefreshJalons() }
+    fun npEditJalon(cutPath: String) {
+        NpJalonDialog.show(this, cutPath, allowRemove = false) { npRefreshJalons() }
+    }
+
+    fun npRemoveJalon(cutPath: String) {
+        NpJalons.remove(this, cutPath)
+        if (npFocusCut == cutPath) npFocusCut = null
+        binding.mediaGrid.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+        toast(R.string.np_jalon_removed)
+        npRefreshJalons()
+    }
+
+    /** Chevron d'un jalon : n'afficher que ses photos (ou revenir à toute la galerie). */
+    fun npToggleFocus(cutPath: String) {
+        npFocusCut = if (npFocusCut == cutPath) null else cutPath
+        val target = cutPath
+        npRefreshJalons()
+        binding.mediaGrid.post {
+            val index = mMedia.indexOfFirst { it is ThumbnailSection && NpJalons.infoOf(it.title)?.cutPath == target }
+            if (npFocusCut != null || index < 0) {
+                binding.mediaGrid.smoothScrollToPosition(0)
+            } else {
+                (binding.mediaGrid.layoutManager as? GridLayoutManager)?.scrollToPositionWithOffset(index, 0)
+            }
+        }
+    }
+
+    private fun npShowBurger(anchor: View) {
+        val style = NpSettings.style(this)
+        val extras = arrayListOf(
+            NpBurger.Extra(
+                getString(R.string.np_jalon_style) + " : " +
+                    getString(if (style == NpSettings.STYLE_CARDS) R.string.np_jalon_style_cards else R.string.np_jalon_style_timeline)
+            ) { npPickStyle() }
+        )
+        refreshMenuItems()
+        NpBurger.show(this, anchor, binding.mediaMenu.requireToolbar().menu, extras)
+    }
+
+    private fun npPickStyle() {
+        val labels = arrayOf(getString(R.string.np_jalon_style_timeline), getString(R.string.np_jalon_style_cards))
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle(R.string.np_jalon_style)
+            .setSingleChoiceItems(labels, NpSettings.style(this)) { dialog, which ->
+                NpSettings.setStyle(this, which)
+                dialog.dismiss()
+                npApplyGridStyle()
+                getMediaAdapter()?.notifyDataSetChanged()
+            }
+            .show()
     }
 
     private fun npKey(item: ThumbnailItem) = when (item) {
         is Medium -> "m:" + item.path
-        is ThumbnailSection -> "s:" + item.title
+        is ThumbnailSection -> "s:" + NpJalons.keyOf(item.title)
         else -> "x:" + item.hashCode()
     }
 
-    /** Recalcule les en-têtes de jalons ; les photos glissent vers leur nouvelle place. */
+    /** Recalcule la liste affichée ; les photos glissent vers leur nouvelle place. */
     private fun npRefreshJalons() {
         val adapter = getMediaAdapter() ?: return
         val oldList = adapter.media
@@ -579,6 +727,37 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
         mMedia = newList
         adapter.media = newList.clone() as ArrayList<ThumbnailItem>
         diff.dispatchUpdatesTo(adapter)
+        binding.mediaGrid.invalidateItemDecorations()
+    }
+
+    /** Apparition de la grille en cascade, ligne par ligne. */
+    private fun npCascade() {
+        if (!npCascadePending) return
+        npCascadePending = false
+        val grid = binding.mediaGrid
+        grid.post {
+            val density = resources.displayMetrics.density
+            var row = -1
+            var lastTop = Int.MIN_VALUE
+            for (i in 0 until grid.childCount) {
+                val child = grid.getChildAt(i)
+                if (child.top != lastTop) {
+                    row++
+                    lastTop = child.top
+                }
+                val col = if (child.width > 0) (child.left / child.width.coerceAtLeast(1)) else 0
+                child.alpha = 0f
+                child.translationY = 22 * density
+                child.scaleX = 0.96f
+                child.scaleY = 0.96f
+                child.animate()
+                    .alpha(1f).translationY(0f).scaleX(1f).scaleY(1f)
+                    .setStartDelay((row * 45L + col * 12L).coerceAtMost(600L))
+                    .setDuration(320)
+                    .setInterpolator(android.view.animation.DecelerateInterpolator(1.6f))
+                    .start()
+            }
+        }
     }
 
     private fun npScrollToTarget() {
@@ -759,8 +938,8 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
         } else {
             getCachedMedia(
                 mPath,
-                (mIsGetVideoIntent && !mIsGetImageIntent) || npOnlyVideos,
-                mIsGetImageIntent && !mIsGetVideoIntent && !npOnlyVideos
+                mIsGetVideoIntent && !mIsGetImageIntent,
+                mIsGetImageIntent && !mIsGetVideoIntent
             ) {
                 if (it.isEmpty()) {
                     runOnUiThread {
@@ -781,8 +960,8 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
         mCurrAsyncTask = GetMediaAsynctask(
             context = applicationContext,
             mPath = mPath,
-            isPickImage = mIsGetImageIntent && !mIsGetVideoIntent && !npOnlyVideos,
-            isPickVideo = (mIsGetVideoIntent && !mIsGetImageIntent) || npOnlyVideos,
+            isPickImage = mIsGetImageIntent && !mIsGetVideoIntent,
+            isPickVideo = mIsGetVideoIntent && !mIsGetImageIntent,
             showAll = mShowAll
         ) {
             ensureBackgroundThread {
@@ -1116,6 +1295,7 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
             binding.mediaFastscroller.beVisibleIf(binding.mediaEmptyTextPlaceholder.isGone())
             setupAdapter()
             npScrollToTarget()
+            npCascade()
         }
 
         mLatestMediaId = getLatestMediaId()

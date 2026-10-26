@@ -20,4 +20,16 @@
     <string name="np_save">Enregistrer</string>
     <string name="np_remove">Retirer</string>
     <string name="np_cancel">Annuler</string>
+    <string name="np_toggle_jalons">Afficher ou masquer les jalons</string>
+    <string name="np_menu">Menu</string>
+    <string name="np_jalon_here">Commencer un jalon ici</string>
+    <string name="np_jalon_style">Affichage des jalons</string>
+    <string name="np_jalon_style_timeline">Frise</string>
+    <string name="np_jalon_style_cards">Cartes</string>
+    <string name="np_jalons_shown">Jalons affichés</string>
+    <string name="np_jalons_hidden">Jalons masqués</string>
+    <string name="np_items">%d éléments</string>
+    <string name="np_item">1 élément</string>
+    <string name="np_add_title">Ajouter un titre</string>
+    <string name="np_info">Infos</string>
 </resources>

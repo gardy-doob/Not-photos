@@ -56,6 +56,9 @@ import org.fossify.gallery.activities.ViewPagerActivity
 import org.fossify.gallery.databinding.PhotoItemGridBinding
 import org.fossify.gallery.databinding.PhotoItemListBinding
 import org.fossify.gallery.databinding.ThumbnailSectionBinding
+import org.fossify.gallery.databinding.NpJalonHeaderBinding
+import org.fossify.gallery.helpers.NpMediaKind
+import org.fossify.gallery.helpers.NpSettings
 import org.fossify.gallery.databinding.VideoItemGridBinding
 import org.fossify.gallery.databinding.VideoItemListBinding
 import org.fossify.gallery.dialogs.DeleteWithRememberDialog
@@ -112,6 +115,7 @@ class MediaAdapter(
     private val ITEM_SECTION = 0
     private val ITEM_MEDIUM_VIDEO_PORTRAIT = 1
     private val ITEM_MEDIUM_PHOTO = 2
+    private val ITEM_NP_JALON = 3
 
     private val config = activity.config
     private val viewType = config.getFolderViewType(if (config.showAll) SHOW_ALL else path)
@@ -137,7 +141,9 @@ class MediaAdapter(
     override fun getActionMenuId() = R.menu.cab_media
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-        val binding = if (viewType == ITEM_SECTION) {
+        val binding = if (viewType == ITEM_NP_JALON) {
+            NpJalonHeaderBinding.inflate(layoutInflater, parent, false)
+        } else if (viewType == ITEM_SECTION) {
             ThumbnailSectionBinding.inflate(layoutInflater, parent, false)
         } else {
             if (isListViewType) {
@@ -163,23 +169,16 @@ class MediaAdapter(
         holder.bindView(tmbItem, tmbItem is Medium, allowLongPress) { itemView, adapterPosition ->
             if (tmbItem is Medium) {
                 setupThumbnail(itemView, tmbItem)
+            } else if (NpJalons.isJalonTitle((tmbItem as ThumbnailSection).title)) {
+                setupJalonHeader(itemView, tmbItem)
             } else {
-                setupSection(itemView, tmbItem as ThumbnailSection)
+                setupSection(itemView, tmbItem)
             }
         }
 
-        // Not Photos : double tap ou appui long sur une photo = nouveau jalon
+        // Aura : double tap sur une photo = nouveau jalon (l'appui long garde la sélection)
         val npActivity = activity as? MediaActivity
         if (tmbItem is Medium && !isAGetIntent && npActivity?.npJalonsActive() == true) {
-            holder.itemView.setOnLongClickListener {
-                if (actModeCallback.isSelectable) {
-                    holder.viewLongClicked()
-                } else {
-                    npPendingOpen?.let { recyclerView.removeCallbacks(it) }
-                    npActivity.npCutAt(tmbItem)
-                }
-                true
-            }
             holder.itemView.setOnClickListener {
                 if (actModeCallback.isSelectable) {
                     holder.viewClicked(tmbItem)
@@ -187,8 +186,6 @@ class MediaAdapter(
                     npTap(holder, tmbItem, npActivity)
                 }
             }
-        } else if (tmbItem is ThumbnailSection && tmbItem.title.startsWith(NpJalons.PREFIX)) {
-            holder.itemView.setOnClickListener { npActivity?.npEditJalon(tmbItem.title) }
         }
         bindViewHolder(holder)
     }
@@ -222,6 +219,7 @@ class MediaAdapter(
     override fun getItemViewType(position: Int): Int {
         val tmbItem = media[position]
         return when {
+            tmbItem is ThumbnailSection && NpJalons.isJalonTitle(tmbItem.title) -> ITEM_NP_JALON
             tmbItem is ThumbnailSection -> ITEM_SECTION
             (tmbItem as Medium).isVideo() || tmbItem.isPortrait() -> ITEM_MEDIUM_VIDEO_PORTRAIT
             else -> ITEM_MEDIUM_PHOTO
@@ -720,12 +718,17 @@ class MediaAdapter(
             favorite.beVisibleIf(medium.isFavorite && config.markFavoriteItems)
 
             playPortraitOutline?.beVisibleIf(medium.isVideo() || medium.isPortrait())
+            val npKind = if (medium.isVideo()) NpMediaKind.get(activity, medium.path) { notifyDataSetChanged() } else -1
             if (medium.isVideo()) {
                 playPortraitOutline?.setImageResource(
                     if (isListViewType) {
                         org.fossify.commons.R.drawable.ic_play_outline_vector
                     } else {
-                        org.fossify.commons.R.drawable.ic_play_vector
+                        when (npKind) {
+                            NpMediaKind.CINEMATIC_VIDEO -> R.drawable.ic_np_cinematic
+                            NpMediaKind.CINEMATIC_PHOTO -> R.drawable.ic_np_sparkle
+                            else -> R.drawable.ic_np_play_circle
+                        }
                     }
                 )
                 playPortraitOutline?.beVisible()
@@ -751,7 +754,7 @@ class MediaAdapter(
             mediumName.text = medium.name
             mediumName.tag = medium.path
 
-            val showVideoDuration = medium.isVideo() && config.showThumbnailVideoDuration
+            val showVideoDuration = medium.isVideo() && config.showThumbnailVideoDuration && npKind != NpMediaKind.CINEMATIC_PHOTO
             if (showVideoDuration) {
                 videoDuration?.text = medium.videoDuration.getFormattedDuration()
             }
@@ -814,35 +817,33 @@ class MediaAdapter(
 
     private fun setupSection(view: View, section: ThumbnailSection) {
         ThumbnailSectionBinding.bind(view).apply {
-            val isJalon = section.title.startsWith(NpJalons.PREFIX)
-            val isJalonEnd = section.title.startsWith(NpJalons.END_PREFIX)
-            thumbnailSection.text = section.title.replace("\u200B", "").trim()
-            when {
-                isJalon -> {
-                    thumbnailSection.setTextColor(0xFFB3263A.toInt())
-                    thumbnailSection.setTypeface(null, android.graphics.Typeface.BOLD)
-                    thumbnailSection.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-                    thumbnailSection.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
-                    thumbnailSection.setBackgroundResource(org.fossify.gallery.R.drawable.np_jalon_section_bg)
-                }
+            thumbnailSection.text = section.title
+            thumbnailSection.setTextColor(textColor)
+        }
+    }
 
-                isJalonEnd -> {
-                    thumbnailSection.setTextColor(textColor)
-                    thumbnailSection.alpha = 0.6f
-                    thumbnailSection.setTypeface(null, android.graphics.Typeface.NORMAL)
-                    thumbnailSection.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-                    thumbnailSection.background = null
+    private fun setupJalonHeader(view: View, section: ThumbnailSection) {
+        val info = NpJalons.infoOf(section.title) ?: return
+        val npActivity = activity as? MediaActivity
+        NpJalonHeaderBinding.bind(view).apply {
+            npJalonTitle.text = info.name
+            npJalonTitle.setTextColor(textColor)
+            npJalonTitle.beVisibleIf(info.name.isNotEmpty())
+            val count = if (info.count > 1) activity.getString(R.string.np_items, info.count) else activity.getString(R.string.np_item)
+            npJalonMeta.text = "${info.range} \u00B7 $count"
+            npJalonMeta.setTextColor(textColor)
+            val cards = NpSettings.style(activity) == NpSettings.STYLE_CARDS
+            npJalonOpen.setImageResource(
+                when {
+                    info.focused -> R.drawable.ic_np_collapse
+                    cards -> R.drawable.ic_np_expand
+                    else -> R.drawable.ic_np_chevron_right
                 }
-
-                else -> {
-                    thumbnailSection.setTextColor(textColor)
-                    thumbnailSection.alpha = 1f
-                    thumbnailSection.setTypeface(null, android.graphics.Typeface.NORMAL)
-                    thumbnailSection.setTextSize(TypedValue.COMPLEX_UNIT_PX, activity.resources.getDimension(org.fossify.commons.R.dimen.bigger_text_size))
-                    thumbnailSection.background = null
-                }
-            }
-            if (isJalon) thumbnailSection.alpha = 1f
+            )
+            npJalonOpen.setColorFilter(textColor)
+            npJalonOpen.setOnClickListener { npActivity?.npToggleFocus(info.cutPath) }
+            npJalonRemove.setOnClickListener { npActivity?.npRemoveJalon(info.cutPath) }
+            npJalonTexts.setOnClickListener { npActivity?.npEditJalon(info.cutPath) }
         }
     }
 

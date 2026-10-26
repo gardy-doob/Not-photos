@@ -773,13 +773,7 @@ class PhotoFragment : ViewPagerFragment() {
 
             onImageEventListener = object : SubsamplingScaleImageView.OnImageEventListener {
                 override fun onReady() {
-                    background = ColorDrawable(
-                        if (config.blackBackground) {
-                            Color.BLACK
-                        } else {
-                            context.getProperBackgroundColor()
-                        }
-                    )
+                    background = ColorDrawable(Color.TRANSPARENT) // Aura : le fond suit la visionneuse (blanc / noir)
 
                     val useWidth = if (mImageOrientation == ORIENTATION_ROTATE_90 || mImageOrientation == ORIENTATION_ROTATE_270) sHeight else sWidth
                     val useHeight = if (mImageOrientation == ORIENTATION_ROTATE_90 || mImageOrientation == ORIENTATION_ROTATE_270) sWidth else sHeight

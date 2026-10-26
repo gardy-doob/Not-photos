@@ -121,6 +121,7 @@ import org.fossify.gallery.helpers.NP_TAB_FOLDERS
 import org.fossify.gallery.helpers.NP_TAB_GALLERY
 import org.fossify.gallery.helpers.NP_TAB_VIDEOS
 import org.fossify.gallery.helpers.NpNav
+import org.fossify.gallery.helpers.NpBurger
 import org.fossify.gallery.helpers.GET_ANY_INTENT
 import org.fossify.gallery.helpers.GET_IMAGE_INTENT
 import org.fossify.gallery.helpers.GET_VIDEO_INTENT
@@ -238,18 +239,27 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
         setupOptionsMenu()
         refreshMenuItems()
 
+        // Aura : plein écran, options dans le menu burger
+        binding.mainMenu.beGone()
         setupEdgeToEdge(
+            padTopSystem = listOf(binding.directoriesGrid, binding.npTopButtons.root, binding.npStatusScrim),
             padBottomImeAndSystem = listOf(binding.directoriesGrid),
             moveBottomSystem = listOf(binding.npNav.root)
         )
+        binding.npStatusScrim.background = android.graphics.drawable.GradientDrawable(
+            android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+            intArrayOf(androidx.core.graphics.ColorUtils.setAlphaComponent(getProperBackgroundColor(), 0xE6), 0)
+        )
+        binding.npTopButtons.npBurger.setOnClickListener {
+            refreshMenuItems()
+            NpBurger.show(this, it, binding.mainMenu.requireToolbar().menu)
+        }
 
         npFoldersMode = intent.getStringExtra(NP_TAB) == NP_TAB_FOLDERS
         if (mIsThirdPartyIntent) {
             NpNav.hide(this)
         } else {
-            NpNav.setup(this, NP_TAB_FOLDERS) {
-                binding.directoriesGrid.smoothScrollToPosition(0)
-            }
+            NpNav.setup(this, NP_TAB_FOLDERS, onReselect = { binding.directoriesGrid.smoothScrollToPosition(0) })
         }
 
         binding.directoriesRefreshLayout.setOnRefreshListener { getDirectories() }

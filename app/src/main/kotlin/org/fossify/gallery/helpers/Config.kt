@@ -223,7 +223,7 @@ class Config(context: Context) : BaseConfig(context) {
             .apply()
 
     var videoPlayerType: Int
-        get() = prefs.getInt(VIDEO_PLAYER_TYPE, if (appRunCount <= 1) VIDEO_PLAYER_APP else VIDEO_PLAYER_SYSTEM)
+        get() = VIDEO_PLAYER_APP // Aura : toujours le lecteur intégré
         set(videoPlayerType) = prefs.edit().putInt(VIDEO_PLAYER_TYPE, videoPlayerType).apply()
 
     var displayFileNames: Boolean
@@ -231,7 +231,7 @@ class Config(context: Context) : BaseConfig(context) {
         set(display) = prefs.edit().putBoolean(DISPLAY_FILE_NAMES, display).apply()
 
     var blackBackground: Boolean
-        get() = prefs.getBoolean(BLACK_BACKGROUND, true)
+        get() = false // Aura : visionneuse sur fond blanc, noir en plein écran
         set(blackBackground) = prefs.edit().putBoolean(BLACK_BACKGROUND, blackBackground).apply()
 
     var filterMedia: Int

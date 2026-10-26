@@ -41,7 +41,7 @@ class JalonsActivity : SimpleActivity() {
             padBottomSystem = listOf(binding.jalonsList),
             moveBottomSystem = listOf(binding.npNav.root)
         )
-        NpNav.setup(this, NP_TAB_JALONS) { binding.jalonsList.smoothScrollToPosition(0) }
+        NpNav.setup(this, NP_TAB_JALONS, onReselect = { binding.jalonsList.smoothScrollToPosition(0) })
         binding.jalonsList.layoutManager = GridLayoutManager(this, 2)
         binding.jalonsList.adapter = JalonsAdapter()
     }
@@ -123,8 +123,10 @@ class JalonsActivity : SimpleActivity() {
             val textColor = getProperTextColor()
             holder.title.setTextColor(textColor)
             holder.subtitle.setTextColor(textColor)
-            holder.title.text = cut.name.ifEmpty { "Jalon" }
-            holder.subtitle.text = if (cut.taken > 0L) dateFormat.format(cut.taken) else ""
+            val date = if (cut.taken > 0L) dateFormat.format(cut.taken) else ""
+            holder.title.text = cut.name.ifEmpty { date }
+            holder.subtitle.text = if (cut.name.isNotEmpty()) date else ""
+            holder.subtitle.visibility = if (cut.name.isNotEmpty()) View.VISIBLE else View.GONE
             Glide.with(holder.image)
                 .load(cut.path)
                 .diskCacheStrategy(DiskCacheStrategy.RESOURCE)

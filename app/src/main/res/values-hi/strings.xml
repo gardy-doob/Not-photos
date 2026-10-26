@@ -135,7 +135,7 @@
     <string name="faq_17_text">Android 11 के साथ आए सिस्टम परिवर्तनों के कारण इसने काम करना बंद कर दिया, ऐप अब वास्तविक फोल्डरों को ब्राउज़ नहीं कर सकता है, यह डेटा लाने के लिए तथाकथित MediaStore पर निर्भर करता है।</string>
     <string name="include_photos">फ़ोटो शामिल करें</string>
     <string name="faq_11_title">क्या मैं किसी तरह मीडिया फाइल थंबनेल को समूहीकृत कर सकता हूँ?</string>
-    <string name="app_launcher_name">Not Photos</string>
+    <string name="app_launcher_name">Aura</string>
     <string name="edit">संपादित करें</string>
     <string name="open_camera">कैमरा खोलें</string>
     <string name="hidden">(छिपा हुआ)</string>

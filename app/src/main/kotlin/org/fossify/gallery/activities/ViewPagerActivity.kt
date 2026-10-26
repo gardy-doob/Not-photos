@@ -233,7 +233,7 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
         setupOptionsMenu()
         refreshMenuItems()
 
-        window.decorView.setBackgroundColor(getProperBackgroundColor())
+        window.decorView.setBackgroundColor(Color.WHITE)
         (MediaActivity.mMedia.clone() as ArrayList<ThumbnailItem>).filterIsInstanceTo(mMediaFiles, Medium::class.java)
 
         requestMediaPermissions {
@@ -286,7 +286,8 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
     fun refreshMenuItems() {
         val currentMedium = getCurrentMedium() ?: return
         currentMedium.isFavorite = mFavoritePaths.contains(currentMedium.path)
-        val visibleBottomActions = if (config.bottomActions) config.visibleBottomActions else 0
+        // Aura : Modifier, Supprimer et Paysage sont dans la barre ; tout le reste dans le burger
+        val visibleBottomActions = BOTTOM_ACTION_EDIT or BOTTOM_ACTION_DELETE or BOTTOM_ACTION_CHANGE_ORIENTATION
 
         runOnUiThread {
             val rotationDegrees = getCurrentPhotoFragment()?.mCurrentRotationDegrees ?: 0
@@ -325,25 +326,32 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
                     if (rotationDegrees != 0) {
                         MenuItem.SHOW_AS_ACTION_ALWAYS
                     } else {
-                        MenuItem.SHOW_AS_ACTION_IF_ROOM
+                        MenuItem.SHOW_AS_ACTION_NEVER
                     }
                 )
             }
 
-            if (visibleBottomActions != 0) {
-                updateBottomActionIcons(currentMedium)
-            }
+            updateMenuItemColors(binding.mediumViewerToolbar.menu, baseColor = Color.WHITE)
         }
     }
 
     private fun setupOptionsMenu() {
+        val npDark = 0xFF3A3330.toInt()
         binding.mediumViewerToolbar.apply {
-            setTitleTextColor(Color.WHITE)
-            overflowIcon = resources.getColoredDrawableWithColor(org.fossify.commons.R.drawable.ic_three_dots_vector, Color.WHITE)
-            navigationIcon = resources.getColoredDrawableWithColor(org.fossify.commons.R.drawable.ic_arrow_left_vector, Color.WHITE)
+            setTitleTextColor(Color.TRANSPARENT)
+            overflowIcon = resources.getColoredDrawableWithColor(R.drawable.ic_np_menu, npDark)
+            navigationIcon = resources.getColoredDrawableWithColor(org.fossify.commons.R.drawable.ic_arrow_left_vector, npDark)
+            menu.add(android.view.Menu.NONE, R.id.np_menu_jalon, 0, R.string.np_jalon_here)
+            for (i in 0 until menu.size()) {
+                val item = menu.getItem(i)
+                item.setShowAsAction(
+                    if (item.itemId == R.id.menu_properties || item.itemId == R.id.menu_save_as) MenuItem.SHOW_AS_ACTION_ALWAYS else MenuItem.SHOW_AS_ACTION_NEVER
+                )
+            }
         }
+        binding.topShadow.beGone()
 
-        updateMenuItemColors(binding.mediumViewerToolbar.menu, forceWhiteIcons = true)
+        updateMenuItemColors(binding.mediumViewerToolbar.menu, baseColor = Color.WHITE)
         binding.mediumViewerToolbar.setOnMenuItemClickListener { menuItem ->
             if (getCurrentMedium() == null) {
                 return@setOnMenuItemClickListener true
@@ -379,6 +387,7 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
                 R.id.menu_resize -> resizeImage()
                 R.id.menu_settings -> launchSettings()
                 R.id.menu_copy_to_clipboard -> copyImageToClipboard()
+                R.id.np_menu_jalon -> npCutHere()
                 else -> return@setOnMenuItemClickListener false
             }
             return@setOnMenuItemClickListener true
@@ -516,10 +525,7 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
         refreshViewPager(true)
         binding.viewPager.offscreenPageLimit = 2
 
-        if (config.blackBackground) {
-            binding.fragmentHolder.background = Color.BLACK.toDrawable()
-            binding.viewPager.background = Color.BLACK.toDrawable()
-        }
+        npApplyViewerBackground(mIsFullScreen, animate = false)
 
         if (config.hideSystemUI) {
             binding.viewPager.onGlobalLayout {
@@ -949,10 +955,7 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
 
     private fun setupNpViewerBar() {
         val bar = binding.npViewerBottom
-        bar.npBarShare.setOnClickListener { shareMediumPath(getCurrentPath()) }
         bar.npBarEdit.setOnClickListener { openEditor(getCurrentPath()) }
-        bar.npBarJalon.setOnClickListener { npCutHere() }
-        bar.npBarFavorite.setOnClickListener { toggleFavorite() }
         bar.npBarDelete.setOnClickListener { checkDeleteConfirmation() }
         bar.npBarLandscape.setOnClickListener {
             val isLandscape = requestedOrientation == SCREEN_ORIENTATION_LANDSCAPE || requestedOrientation == SCREEN_ORIENTATION_REVERSE_LANDSCAPE
@@ -975,8 +978,40 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
     }
 
     private fun npUpdateFavoriteIcon() {
-        val favorite = getCurrentMedium()?.isFavorite == true
-        binding.npViewerBottom.npBarFavoriteIcon.setImageResource(if (favorite) R.drawable.ic_np_star_filled else R.drawable.ic_np_star)
+        refreshMenuItems()
+    }
+
+    /** Glisser une photo vers le haut : informations (EXIF). */
+    fun npShowInfo() {
+        showProperties()
+    }
+
+    private var npBgAnimator: android.animation.ValueAnimator? = null
+    private var npBgColor = Color.WHITE
+
+    /** Fond blanc en navigation, noir quand l'interface est masquée. */
+    private fun npApplyViewerBackground(fullscreen: Boolean, animate: Boolean) {
+        val target = if (fullscreen) Color.BLACK else Color.WHITE
+        npBgAnimator?.cancel()
+        fun apply(color: Int) {
+            npBgColor = color
+            window.decorView.setBackgroundColor(color)
+            binding.fragmentHolder.setBackgroundColor(color)
+            binding.viewPager.setBackgroundColor(color)
+        }
+        if (!animate) {
+            apply(target)
+        } else {
+            npBgAnimator = android.animation.ValueAnimator.ofArgb(npBgColor, target).apply {
+                duration = 260
+                addUpdateListener { apply(it.animatedValue as Int) }
+                start()
+            }
+        }
+        androidx.core.view.WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = !fullscreen
+            isAppearanceLightNavigationBars = !fullscreen
+        }
     }
 
     private fun npGapsBefore(media: List<Medium>): Set<Int> = NpJalons.gapsBefore(this, media)
@@ -984,7 +1019,7 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
     private fun npCutHere() {
         val medium = getCurrentMedium() ?: return
         if (NpJalons.add(this, medium)) {
-            binding.npViewerBottom.npBarJalon.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+            binding.viewPager.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
             toast(getString(R.string.np_jalon_created, NpJalons.timeLabel(NpJalons.timeOf(medium))))
             val media = getCurrentMedia()
             npStrip?.setMedia(media.map { it.path }, npGapsBefore(media))
@@ -1535,6 +1570,7 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
     }
 
     private fun fullscreenToggled() {
+        npApplyViewerBackground(mIsFullScreen, animate = true)
         binding.viewPager.adapter?.let {
             (it as MyPagerAdapter).toggleFullscreen(mIsFullScreen)
             val newAlpha = if (mIsFullScreen) 0f else 1f

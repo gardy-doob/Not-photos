@@ -175,6 +175,10 @@ abstract class ViewPagerFragment : Fragment() {
                     activity?.finish()
                     activity?.overridePendingTransition(0, org.fossify.commons.R.anim.slide_down)
                 }
+                // Aura : glisser vers le haut = informations de la photo (EXIF)
+                else if (!mIgnoreCloseDown && (Math.abs(diffY) > Math.abs(diffX) * 1.5f) && (diffY > mCloseDownThreshold) && downGestureDuration < MAX_CLOSE_DOWN_GESTURE_DURATION) {
+                    (activity as? org.fossify.gallery.activities.ViewPagerActivity)?.npShowInfo()
+                }
                 mIgnoreCloseDown = false
             }
         }

@@ -56,6 +56,7 @@ class SettingsActivity : SimpleActivity() {
         setupUseEnglish()
         setupLanguage()
         setupChangeDateTimeFormat()
+        setupNpJalonStyle()
         setupManageIncludedFolders()
         setupManageExcludedFolders()
         setupManageHiddenFolders()
@@ -150,6 +151,23 @@ class SettingsActivity : SimpleActivity() {
     private fun setupChangeDateTimeFormat() {
         binding.settingsChangeDateTimeFormatHolder.setOnClickListener {
             ChangeDateTimeFormatDialog(this) {}
+        }
+    }
+
+    private fun setupNpJalonStyle() {
+        fun label() = getString(
+            if (org.fossify.gallery.helpers.NpSettings.style(this) == org.fossify.gallery.helpers.NpSettings.STYLE_CARDS) R.string.np_jalon_style_cards else R.string.np_jalon_style_timeline
+        )
+        binding.settingsNpJalonStyle.text = label()
+        binding.settingsNpJalonStyleHolder.setOnClickListener {
+            val items = arrayListOf(
+                RadioItem(org.fossify.gallery.helpers.NpSettings.STYLE_TIMELINE, getString(R.string.np_jalon_style_timeline)),
+                RadioItem(org.fossify.gallery.helpers.NpSettings.STYLE_CARDS, getString(R.string.np_jalon_style_cards))
+            )
+            RadioGroupDialog(this@SettingsActivity, items, org.fossify.gallery.helpers.NpSettings.style(this)) {
+                org.fossify.gallery.helpers.NpSettings.setStyle(this, it as Int)
+                binding.settingsNpJalonStyle.text = label()
+            }
         }
     }
 

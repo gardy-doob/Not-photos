@@ -24,10 +24,10 @@ class NpFilmstrip(
     private val onCenterChanged: (position: Int) -> Unit
 ) {
     private val density = recyclerView.resources.displayMetrics.density
-    private val itemWidth = (36 * density).toInt()
-    private val itemHeight = (48 * density).toInt()
+    private val itemWidth = (25 * density).toInt()
+    private val itemHeight = (34 * density).toInt()
     private val itemSpacing = (2 * density).toInt()
-    private val gapWidth = (14 * density).toInt()
+    private val gapWidth = (10 * density).toInt()
 
     private val layoutManager = LinearLayoutManager(recyclerView.context, LinearLayoutManager.HORIZONTAL, false)
     private val snapHelper = LinearSnapHelper()
@@ -113,7 +113,7 @@ class NpFilmstrip(
             frame.layoutParams = RecyclerView.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, itemHeight)
 
             val gap = View(context).apply {
-                layoutParams = FrameLayout.LayoutParams((3 * density).toInt(), (56 * density).toInt()).apply {
+                layoutParams = FrameLayout.LayoutParams((3 * density).toInt(), (40 * density).toInt()).apply {
                     gravity = android.view.Gravity.CENTER_VERTICAL
                 }
                 setBackgroundColor(0xFFFF6B7E.toInt())
@@ -124,7 +124,7 @@ class NpFilmstrip(
                 clipToOutline = true
                 outlineProvider = object : ViewOutlineProvider() {
                     override fun getOutline(view: View, outline: Outline) {
-                        outline.setRoundRect(0, 0, view.width, view.height, 6 * density)
+                        outline.setRoundRect(0, 0, view.width, view.height, 4 * density)
                     }
                 }
             }

@@ -11,26 +11,30 @@ import java.util.Calendar
 import java.util.Locale
 
 /**
- * Jalons Not Photos : un jalon commence à une photo (son « point de coupe ») et regroupe
- * toutes les photos prises ensuite le même jour, jusqu'au jalon suivant.
+ * Jalons Aura : un jalon commence à une photo (son « point de coupe ») et regroupe toutes les
+ * photos prises ensuite — y compris les jours suivants — jusqu'au jalon suivant.
+ * Les photos plus anciennes que le tout premier jalon n'appartiennent à aucun jalon.
  * Les points de coupe sont stockés localement (préférences) sous forme de liste JSON.
  */
 object NpJalons {
-    const val PREFIX = "✂ "
-    /** En-tête discret qui referme un jalon quand des photos hors jalon suivent. */
-    const val END_PREFIX = "\u2003"
+    /** Préfixe des en-têtes de jalon insérés dans la grille. */
+    const val PREFIX = "✂"
+    private const val SEP = "\u001F"
     private const val PREFS = "np_jalons"
     private const val KEY_CUTS = "cuts"
 
     data class Cut(val path: String, var name: String, val taken: Long)
 
-    class Group(val cut: Cut, val number: Int, val members: MutableList<Medium> = ArrayList())
+    /** Ce qu'affiche un en-tête de jalon. */
+    data class Info(val cutPath: String, val name: String, val range: String, val count: Int, val focused: Boolean)
 
-    /** Titre de section affiché → chemin du point de coupe (pour retrouver le jalon touché). */
-    val sectionToCut = HashMap<String, String>()
+    /** Positions (dans la liste affichée) couvertes par chaque jalon : en-tête → dernière photo. */
+    var lastRanges: List<IntRange> = emptyList()
+        private set
 
     private var cache: MutableList<Cut>? = null
     private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+    private val dayTimeFormat = SimpleDateFormat("d MMM HH:mm", Locale.getDefault())
 
     fun all(context: Context): MutableList<Cut> {
         cache?.let { return it }
@@ -80,84 +84,137 @@ object NpJalons {
 
     fun timeLabel(ts: Long): String = timeFormat.format(ts)
 
-    private fun dayKey(ts: Long): Int {
-        val c = Calendar.getInstance().apply { timeInMillis = ts }
-        return c.get(Calendar.YEAR) * 1000 + c.get(Calendar.DAY_OF_YEAR)
+    private fun sameDay(a: Long, b: Long): Boolean {
+        val ca = Calendar.getInstance().apply { timeInMillis = a }
+        val cb = Calendar.getInstance().apply { timeInMillis = b }
+        return ca.get(Calendar.YEAR) == cb.get(Calendar.YEAR) && ca.get(Calendar.DAY_OF_YEAR) == cb.get(Calendar.DAY_OF_YEAR)
     }
 
-    /** Pour chaque photo, le jalon auquel elle appartient (ou rien). */
-    fun groupsOf(context: Context, media: List<Medium>): Map<String, Group> {
-        val cuts = all(context).associateBy { it.path }
+    fun rangeLabel(start: Long, end: Long): String {
+        return if (sameDay(start, end)) {
+            "${timeFormat.format(start)} → ${timeFormat.format(end)}"
+        } else {
+            "${dayTimeFormat.format(start)} → ${dayTimeFormat.format(end)}"
+        }
+    }
+
+    /** Pour chaque photo, le jalon auquel elle appartient (le dernier point de coupe qui la précède). */
+    fun groupsOf(context: Context, media: List<Medium>): Map<String, Cut> {
+        val cuts = all(context).sortedBy { it.taken }
         if (cuts.isEmpty()) return emptyMap()
-        val result = HashMap<String, Group>()
-        media.groupBy { dayKey(timeOf(it)) }.values.forEach { day ->
-            var current: Group? = null
-            var number = 0
-            day.sortedWith(compareBy<Medium> { timeOf(it) }.thenBy { it.path }).forEach { m ->
-                val cut = cuts[m.path]
-                if (cut != null) {
-                    number++
-                    current = Group(cut, number)
-                }
-                current?.let {
-                    it.members.add(m)
-                    result[m.path] = it
+        val times = LongArray(cuts.size) { cuts[it].taken }
+        val result = HashMap<String, Cut>(media.size)
+        media.forEach { m ->
+            val t = timeOf(m)
+            var lo = 0
+            var hi = times.size - 1
+            var found = -1
+            while (lo <= hi) {
+                val mid = (lo + hi) ushr 1
+                if (times[mid] <= t) {
+                    found = mid
+                    lo = mid + 1
+                } else {
+                    hi = mid - 1
                 }
             }
+            if (found >= 0) result[m.path] = cuts[found]
         }
         return result
     }
 
-    fun title(group: Group): String {
-        val name = group.cut.name.ifEmpty { "Jalon ${group.number}" }
-        val times = group.members.map { timeOf(it) }
-        val start = timeLabel(times.minOrNull() ?: 0L)
-        val end = timeLabel(times.maxOrNull() ?: 0L)
-        val count = group.members.size
-        return "$PREFIX$name · $start → $end · $count ${if (count > 1) "éléments" else "élément"}"
+    fun isJalonTitle(title: String) = title.startsWith(PREFIX)
+
+    /** Identité stable d'un en-tête (pour les animations) : le chemin du point de coupe. */
+    fun keyOf(title: String) = title.substringBefore(SEP)
+
+    fun infoOf(title: String): Info? {
+        if (!isJalonTitle(title)) return null
+        val parts = title.removePrefix(PREFIX).split(SEP)
+        if (parts.size < 5) return null
+        return Info(parts[0], parts[3], parts[2], parts[1].toIntOrNull() ?: 0, parts[4] == "1")
     }
 
-    /** Insère un en-tête de jalon avant la première photo (dans l'ordre affiché) de chaque jalon. */
-    fun decorate(context: Context, items: ArrayList<ThumbnailItem>): ArrayList<ThumbnailItem> {
-        val clean = items.filterNot { it is ThumbnailSection && (it.title.startsWith(PREFIX) || it.title.startsWith(END_PREFIX)) }
-        val media = clean.filterIsInstance<Medium>()
-        val groups = groupsOf(context, media)
-        if (groups.isEmpty()) return ArrayList(clean)
+    /**
+     * Insère un en-tête avant la première photo affichée de chaque jalon.
+     * [focusCut] : n'afficher que les photos de ce jalon.
+     */
+    fun decorate(context: Context, items: List<ThumbnailItem>, focusCut: String?): ArrayList<ThumbnailItem> {
+        var clean: List<ThumbnailItem> = items.filterNot { it is ThumbnailSection && isJalonTitle(it.title) }
+        val groups = groupsOf(context, clean.filterIsInstance<Medium>())
 
-        sectionToCut.clear()
-        val seen = HashSet<Group>()
-        val result = ArrayList<ThumbnailItem>(clean.size + 8)
-        var previous: Group? = null
-        var endCount = 0
+        if (focusCut != null) {
+            clean = clean.filter { it !is Medium || groups[it.path]?.path == focusCut }
+            clean = dropEmptySections(clean)
+        }
+
+        if (groups.isEmpty()) {
+            lastRanges = emptyList()
+            return ArrayList(clean)
+        }
+
+        val members = HashMap<String, MutableList<Medium>>()
+        clean.forEach { if (it is Medium) groups[it.path]?.let { cut -> members.getOrPut(cut.path) { ArrayList() }.add(it) } }
+
+        val result = ArrayList<ThumbnailItem>(clean.size + 16)
+        val ranges = ArrayList<IntRange>()
+        var currentCut: String? = null
+        var rangeStart = -1
+        var rangeEnd = -1
+        val seen = HashSet<String>()
+
+        fun closeRange() {
+            if (rangeStart >= 0 && rangeEnd >= rangeStart) ranges.add(rangeStart..rangeEnd)
+            rangeStart = -1
+            rangeEnd = -1
+        }
+
         clean.forEach { item ->
             if (item is Medium) {
-                val group = groups[item.path]
-                if (group != null && seen.add(group)) {
-                    val title = title(group)
-                    sectionToCut[title] = group.cut.path
-                    result.add(ThumbnailSection(title))
-                } else if (group == null && previous != null) {
-                    endCount++
-                    result.add(ThumbnailSection(END_PREFIX + "Hors jalon" + "\u200B".repeat(endCount)))
+                val cut = groups[item.path]
+                if (cut?.path != currentCut) {
+                    closeRange()
+                    currentCut = cut?.path
                 }
-                previous = group
+
+                if (cut != null && seen.add(cut.path)) {
+                    val list = members[cut.path].orEmpty()
+                    val times = list.map { timeOf(it) }
+                    val range = rangeLabel(times.minOrNull() ?: cut.taken, times.maxOrNull() ?: cut.taken)
+                    val title = PREFIX + cut.path + SEP + list.size + SEP + range + SEP + cut.name + SEP + (if (focusCut != null) "1" else "0")
+                    rangeStart = result.size
+                    result.add(ThumbnailSection(title))
+                }
+                result.add(item)
+                if (cut != null) rangeEnd = result.size - 1
             } else {
-                previous = null
+                result.add(item)
+            }
+        }
+        closeRange()
+        lastRanges = ranges
+        return result
+    }
+
+    fun dropEmptySections(items: List<ThumbnailItem>): List<ThumbnailItem> {
+        val result = ArrayList<ThumbnailItem>(items.size)
+        items.forEachIndexed { index, item ->
+            if (item is ThumbnailSection && !isJalonTitle(item.title)) {
+                val next = items.getOrNull(index + 1)
+                if (next == null || (next is ThumbnailSection && !isJalonTitle(next.title))) return@forEachIndexed
             }
             result.add(item)
         }
         return result
     }
 
-    /** Positions de la bande de miniatures où un jalon commence (ou se termine). */
+    /** Positions de la bande de miniatures où un jalon commence. */
     fun gapsBefore(context: Context, media: List<Medium>): Set<Int> {
         val groups = groupsOf(context, media)
         if (groups.isEmpty()) return emptySet()
         val gaps = HashSet<Int>()
         for (i in 1 until media.size) {
-            val a = groups[media[i - 1].path]
-            val b = groups[media[i].path]
-            if (a !== b) gaps.add(i)
+            if (groups[media[i - 1].path]?.path != groups[media[i].path]?.path) gaps.add(i)
         }
         return gaps
     }
