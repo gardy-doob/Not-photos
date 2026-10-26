@@ -17,7 +17,13 @@ jobs:
           java-version: "21"
       - uses: gradle/actions/setup-gradle@v5
       - name: Compile l'APK de test
-        run: ./gradlew :app:assembleFossDebug --stacktrace
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew :app:assembleFossDebug --stacktrace 2>&1 | tee build.log || {
+            grep -E "^e: |error:|What went wrong" -A2 build.log | head -60 | sed 's/%/%25/g' | while IFS= read -r l; do echo "::error::$l"; done
+            exit 1
+          }
       - name: Publier l'APK
         uses: actions/upload-artifact@v5
         with:
