@@ -30,6 +30,5 @@ fun Resources.getNavBarHeight(): Int {
 }
 
 fun Resources.getBottomActionsHeight(): Int {
-    return getDimensionPixelSize(R.dimen.bottom_actions_height) +
-                getDimensionPixelSize(org.fossify.commons.R.dimen.normal_margin)
+    return getDimensionPixelSize(R.dimen.np_viewer_bottom_height)
 }

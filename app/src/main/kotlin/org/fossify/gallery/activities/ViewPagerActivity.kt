@@ -171,6 +171,8 @@ import org.fossify.gallery.helpers.SLIDESHOW_DEFAULT_INTERVAL
 import org.fossify.gallery.helpers.SLIDESHOW_FADE_DURATION
 import org.fossify.gallery.helpers.SLIDESHOW_SLIDE_DURATION
 import org.fossify.gallery.helpers.SLIDESHOW_START_ON_ENTER
+import org.fossify.gallery.helpers.NpFilmstrip
+import org.fossify.gallery.helpers.NpNav
 import org.fossify.gallery.helpers.TYPE_GIFS
 import org.fossify.gallery.helpers.TYPE_IMAGES
 import org.fossify.gallery.helpers.TYPE_PORTRAITS
@@ -224,7 +226,7 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
         setupEdgeToEdge(
-            padBottomSystem = listOf(binding.bottomActions.bottomActionsWrapper),
+            padBottomSystem = listOf(binding.npViewerBottom.root),
         )
 
         setupOptionsMenu()
@@ -935,14 +937,55 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
     }
 
     private fun initBottomActionsLayout() {
-        if (config.bottomActions) {
-            binding.bottomActions.root.beVisible()
-        } else {
-            binding.bottomActions.root.beGone()
+        // Not Photos : la barre d'origine est remplacée par la barre flottante + la bande de miniatures
+        binding.bottomActions.root.beGone()
+        if (!mIsFullScreen) {
+            binding.npViewerBottom.root.beVisible()
         }
     }
 
+    private var npStrip: NpFilmstrip? = null
+
+    private fun setupNpViewerBar() {
+        val bar = binding.npViewerBottom
+        bar.npBarShare.setOnClickListener { shareMediumPath(getCurrentPath()) }
+        bar.npBarEdit.setOnClickListener { openEditor(getCurrentPath()) }
+        bar.npBarJalon.setOnClickListener { npCutHere() }
+        bar.npBarFavorite.setOnClickListener { toggleFavorite() }
+        bar.npBarDelete.setOnClickListener { checkDeleteConfirmation() }
+        bar.npBarLandscape.setOnClickListener {
+            val isLandscape = requestedOrientation == SCREEN_ORIENTATION_LANDSCAPE || requestedOrientation == SCREEN_ORIENTATION_REVERSE_LANDSCAPE
+            requestedOrientation = if (isLandscape) SCREEN_ORIENTATION_UNSPECIFIED else SCREEN_ORIENTATION_LANDSCAPE
+            mIsOrientationLocked = requestedOrientation != SCREEN_ORIENTATION_UNSPECIFIED
+        }
+
+        if (npStrip == null) {
+            npStrip = NpFilmstrip(bar.npStrip) { position ->
+                if (position != binding.viewPager.currentItem) {
+                    binding.viewPager.setCurrentItem(position, false)
+                }
+            }
+        }
+
+        val media = getCurrentMedia()
+        npStrip?.setMedia(media.map { it.path }, npGapsBefore(media))
+        npStrip?.setCurrent(mPos)
+        npUpdateFavoriteIcon()
+    }
+
+    private fun npUpdateFavoriteIcon() {
+        val favorite = getCurrentMedium()?.isFavorite == true
+        binding.npViewerBottom.npBarFavoriteIcon.setImageResource(if (favorite) R.drawable.ic_np_star_filled else R.drawable.ic_np_star)
+    }
+
+    private fun npGapsBefore(media: List<Medium>): Set<Int> = emptySet()
+
+    private fun npCutHere() {
+        NpNav.comingSoon(this)
+    }
+
     private fun initBottomActionButtons() {
+        setupNpViewerBar()
         val currentMedium = getCurrentMedium()
         val visibleBottomActions = if (config.bottomActions) config.visibleBottomActions else 0
         binding.bottomActions.bottomFavorite.beVisibleIf(visibleBottomActions and BOTTOM_ACTION_TOGGLE_FAVORITE != 0 && currentMedium?.getIsInRecycleBin() == false)
@@ -1055,6 +1098,8 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
         if (medium == null) {
             return
         }
+
+        npUpdateFavoriteIcon()
 
         val favoriteIcon =
             if (medium.isFavorite) org.fossify.commons.R.drawable.ic_star_vector else org.fossify.commons.R.drawable.ic_star_outline_vector
@@ -1485,10 +1530,10 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
             (it as MyPagerAdapter).toggleFullscreen(mIsFullScreen)
             val newAlpha = if (mIsFullScreen) 0f else 1f
             binding.topShadow.animate().alpha(newAlpha).start()
-            binding.bottomActions.root.animate().alpha(newAlpha).withStartAction {
-                binding.bottomActions.root.beVisible()
+            binding.npViewerBottom.root.animate().alpha(newAlpha).withStartAction {
+                binding.npViewerBottom.root.beVisible()
             }.withEndAction {
-                binding.bottomActions.root.beVisibleIf(newAlpha == 1f)
+                binding.npViewerBottom.root.beVisibleIf(newAlpha == 1f)
             }.start()
 
             binding.mediumViewerAppbar.animate().alpha(newAlpha).withStartAction {
@@ -1525,6 +1570,8 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
     override fun onPageSelected(position: Int) {
         if (mPos != position) {
             mPos = position
+            npStrip?.setCurrent(position)
+            npUpdateFavoriteIcon()
             updateActionbarTitle()
             refreshMenuItems()
             scheduleSwipe()
