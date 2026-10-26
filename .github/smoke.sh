@@ -15,7 +15,7 @@ sleep 3
 shot() { adb shell screencap -p /sdcard/s.png; adb pull /sdcard/s.png "shots/$1.png" >/dev/null 2>&1; }
 top() { adb shell dumpsys activity activities | grep -m1 -E "topResumedActivity|mResumedActivity" | sed 's/.*{//; s/}.*//' | tr -d '\r'; }
 STATES=""
-step() { STATES="$STATES | $1: $(top | awk '{print $NF}' | sed 's/.*\///')"; }
+step() { STATES="$STATES | $1: $(top | tr ' ' '\n' | grep '/' | sed 's/.*[./]//')"; }
 adb logcat -c
 adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null
 sleep 20; shot 1-galerie; step lancement
