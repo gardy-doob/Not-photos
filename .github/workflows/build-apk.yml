@@ -24,3 +24,65 @@ jobs:
           name: not-photos-debug-apk
           path: app/build/outputs/apk/foss/debug/*.apk
           retention-days: 30
+
+  smoke-test:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Activer KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: actions/download-artifact@v5
+        with:
+          name: not-photos-debug-apk
+          path: apk
+      - name: Lancer l'app sur un émulateur
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            set -x
+            APK=$(ls apk/*universal*.apk apk/*.apk 2>/dev/null | head -1)
+            adb install -r -g "$APK"
+            PKG=$(adb shell pm list packages | grep notphotos | head -1 | cut -d: -f2 | tr -d '\r')
+            adb shell mkdir -p /sdcard/DCIM/Camera
+            for i in 1 2 3 4 5 6 7 8 9 10 11 12; do adb shell screencap -p /sdcard/DCIM/Camera/IMG_2026102${i}_1200${i}.png; sleep 1; done
+            adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:///sdcard/DCIM/Camera/ || true
+            adb shell content call --uri content://media/external/file --method scan_volume --arg external_primary || true
+            adb logcat -c
+            adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1
+            sleep 15
+            adb shell screencap -p /sdcard/s1.png; adb pull /sdcard/s1.png shots/1-galerie.png || mkdir -p shots && adb pull /sdcard/s1.png shots/1-galerie.png
+            # double tap sur la 1re vignette (jalon), puis ouverture de la visionneuse
+            adb shell input tap 110 520; adb shell input tap 110 520; sleep 3
+            adb shell input tap 330 520; sleep 4
+            adb shell screencap -p /sdcard/s2.png; adb pull /sdcard/s2.png shots/2-visionneuse.png
+            adb shell input swipe 540 1700 540 700 200; sleep 3
+            adb shell input keyevent KEYCODE_BACK; sleep 1
+            adb shell input tap 540 1200; sleep 2
+            adb shell input keyevent KEYCODE_BACK; sleep 2
+            # onglets : Vidéos, Galerie, Jalons, Toutes, Dossiers, interrupteur
+            for x in 240 110 370 500 630 110 980 980; do adb shell input tap $x 2230; sleep 3; done
+            adb shell screencap -p /sdcard/s3.png; adb pull /sdcard/s3.png shots/3-fin.png
+            adb logcat -d > logcat.txt
+            echo "===== Plantages ====="
+            grep -E "FATAL EXCEPTION|AndroidRuntime" -A40 logcat.txt | head -150 || true
+            if grep -q "FATAL EXCEPTION" logcat.txt; then echo "PLANTAGE DÉTECTÉ"; exit 1; fi
+            echo "Aucun plantage"
+      - name: Captures d'écran
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: captures-emulateur
+          path: |
+            shots/
+            logcat.txt
+          retention-days: 7
