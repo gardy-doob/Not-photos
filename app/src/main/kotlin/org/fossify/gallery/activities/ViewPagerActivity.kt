@@ -331,6 +331,9 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
                 )
             }
 
+            binding.mediumViewerToolbar.menu.findItem(R.id.np_menu_jalon)?.setTitle(
+                if (NpJalons.pendingStart != null && NpJalons.pendingStart?.path != currentMedium.path) R.string.np_jalon_end_here else R.string.np_jalon_here
+            )
             updateMenuItemColors(binding.mediumViewerToolbar.menu, baseColor = Color.WHITE)
         }
     }
@@ -370,7 +373,7 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
                 R.id.menu_rename -> checkMediaManagementAndRename()
                 R.id.menu_print -> printFile()
                 R.id.menu_edit -> openEditor(getCurrentPath())
-                R.id.menu_properties -> showProperties()
+                R.id.menu_properties -> npShowInfo()
                 R.id.menu_show_on_map -> showFileOnMap(getCurrentPath())
                 R.id.menu_rotate_right -> rotateImage(90)
                 R.id.menu_rotate_left -> rotateImage(-90)
@@ -435,6 +438,9 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
 
                 // make sure "Open Recycle Bin" works well with "Show all folders content"
                 mShowAll = config.showAll && (mPath.isNotEmpty() && !mPath.startsWith(recycleBinPath))
+                // Aura : Galerie / Vidéos / Toutes parcourent plusieurs dossiers
+                npTab = intent.getStringExtra(org.fossify.gallery.helpers.NP_TAB)
+                if (npTab != null) mShowAll = true
             } catch (e: Exception) {
                 showErrorToast(e)
                 finish()
@@ -981,9 +987,23 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
         refreshMenuItems()
     }
 
-    /** Glisser une photo vers le haut : informations (EXIF). */
+    private val npInfo by lazy {
+        org.fossify.gallery.helpers.NpInfoSheet(this, binding.npInfoSheet, binding.viewPager) {
+            listOf(binding.npViewerBottom.root, binding.mediumViewerAppbar)
+        }
+    }
+
+    /** Glisser une photo vers le haut (ou le « i ») : informations façon Google Photos. */
     fun npShowInfo() {
-        showProperties()
+        getCurrentMedium()?.let { npInfo.show(it) }
+    }
+
+    override fun onBackPressedCompat(): Boolean {
+        if (npInfo.isShown) {
+            npInfo.hide()
+            return true
+        }
+        return super.onBackPressedCompat()
     }
 
     private var npBgAnimator: android.animation.ValueAnimator? = null
@@ -1018,14 +1038,29 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
 
     private fun npCutHere() {
         val medium = getCurrentMedium() ?: return
-        if (NpJalons.add(this, medium)) {
+        val start = NpJalons.pendingStart
+        if (start == null || start.path == medium.path) {
+            if (NpJalons.cutOf(this, medium) != null) {
+                toast(R.string.np_souvenir_inside)
+                return
+            }
+            NpJalons.pendingStart = medium
             binding.viewPager.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
             toast(getString(R.string.np_jalon_created, NpJalons.timeLabel(NpJalons.timeOf(medium))))
-            val media = getCurrentMedia()
-            npStrip?.setMedia(media.map { it.path }, npGapsBefore(media))
         } else {
-            toast(R.string.np_jalon_exists)
+            when (NpJalons.add(this, start, medium)) {
+                NpJalons.AddResult.OVERLAP -> toast(R.string.np_souvenir_overlap)
+                NpJalons.AddResult.SAME -> NpJalons.pendingStart = null
+                NpJalons.AddResult.OK -> {
+                    NpJalons.pendingStart = null
+                    binding.viewPager.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                    toast(R.string.np_souvenir_created)
+                    val media = getCurrentMedia()
+                    npStrip?.setMedia(media.map { it.path }, npGapsBefore(media))
+                }
+            }
         }
+        refreshMenuItems()
     }
 
     private fun initBottomActionButtons() {
@@ -1414,10 +1449,13 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
         }
     }
 
+    private var npTab: String? = null
+
     private fun gotMedia(thumbnailItems: ArrayList<ThumbnailItem>, ignorePlayingVideos: Boolean = false, refetchViewPagerPosition: Boolean = false) {
-        val media = thumbnailItems.asSequence().filter {
+        var media = thumbnailItems.asSequence().filter {
             it is Medium && !mIgnoredPaths.contains(it.path)
         }.map { it as Medium }.toMutableList() as ArrayList<Medium>
+        npTab?.let { tab -> media = ArrayList(org.fossify.gallery.helpers.NpGallery.filter(this, tab, media)) }
 
         if (isDirEmpty(media) || media.hashCode() == mPrevHashcode) {
             return
@@ -1617,6 +1655,7 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
             mPos = position
             npStrip?.setCurrent(position)
             npUpdateFavoriteIcon()
+            if (npInfo.isShown) npShowInfo()
             updateActionbarTitle()
             refreshMenuItems()
             scheduleSwipe()

@@ -1429,12 +1429,13 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
             return
         }
 
-        // Not Photos : on démarre toujours sur la Galerie (DCIM/Camera), sauf dossier par défaut choisi
-        val cameraPath = NpNav.cameraPath(this)
-        val target = config.defaultFolder.ifEmpty { cameraPath }
-        if (target.isEmpty()) {
+        // Aura : on démarre toujours sur la Galerie (appareil photo + dossiers ajoutés), sauf dossier par défaut choisi
+        if (config.defaultFolder.isEmpty()) {
+            handleMediaIntent(NpNav.intentFor(this, NP_TAB_GALLERY))
             return
         }
+        val cameraPath = NpNav.cameraPath(this)
+        val target = config.defaultFolder
 
         val defaultDir = File(target)
 

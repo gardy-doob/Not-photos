@@ -96,6 +96,16 @@
         android:layout_gravity="top|end" />
 
     <include
+        android:id="@+id/np_souvenir_bar"
+        layout="@layout/np_souvenir_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="92dp" />
+
+    <include
         android:id="@+id/np_nav"
         layout="@layout/np_bottom_nav"
         android:layout_width="match_parent"

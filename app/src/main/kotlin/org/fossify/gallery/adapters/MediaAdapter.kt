@@ -168,7 +168,7 @@ class MediaAdapter(
         val allowLongPress = (!isAGetIntent || allowMultiplePicks) && tmbItem is Medium
         holder.bindView(tmbItem, tmbItem is Medium, allowLongPress) { itemView, adapterPosition ->
             if (tmbItem is Medium) {
-                setupThumbnail(itemView, tmbItem)
+                setupThumbnail(itemView, tmbItem, position)
             } else if (NpJalons.isJalonTitle((tmbItem as ThumbnailSection).title)) {
                 setupJalonHeader(itemView, tmbItem)
             } else {
@@ -195,6 +195,11 @@ class MediaAdapter(
     private var npPendingOpen: Runnable? = null
 
     private fun npTap(holder: MyRecyclerViewAdapter.ViewHolder, medium: Medium, npActivity: MediaActivity) {
+        if (npActivity.npPendingStart != null) {
+            npPendingOpen?.let { recyclerView.removeCallbacks(it) }
+            if (npActivity.npPendingStart?.path == medium.path) npActivity.npCancelPending() else npActivity.npFinishSouvenir(medium)
+            return
+        }
         val now = SystemClock.uptimeMillis()
         npPendingOpen?.let { recyclerView.removeCallbacks(it) }
         npPendingOpen = null
@@ -704,7 +709,7 @@ class MediaAdapter(
         notifyDataSetChanged()
     }
 
-    private fun setupThumbnail(view: View, medium: Medium) {
+    private fun setupThumbnail(view: View, medium: Medium, npPosition: Int = -1) {
         val isSelected = selectedKeys.contains(medium.path.hashCode())
         bindItem(view, medium).apply {
             val padding = if (config.thumbnailSpacing <= 1) {
@@ -714,6 +719,22 @@ class MediaAdapter(
             }
 
             mediaItemHolder.setPadding(padding, padding, padding, padding)
+
+            val npActivity = activity as? MediaActivity
+            val npSouvenir = npActivity?.npSouvenirLayout() == true
+            if (npSouvenir) mediaItemHolder.setPadding(0, 0, 0, 0)
+            val npRadius = if (!npSouvenir) 0f else {
+                if (NpJalons.lastLayout.getOrElse(npPosition) { 0 } >= 10) 12f else 6f
+            } * activity.resources.displayMetrics.density
+            mediumThumbnail.clipToOutline = npRadius > 0f
+            mediumThumbnail.outlineProvider = if (npRadius > 0f) object : android.view.ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: android.graphics.Outline) {
+                    outline.setRoundRect(0, 0, view.width, view.height, npRadius)
+                }
+            } else android.view.ViewOutlineProvider.BACKGROUND
+            val npIsStart = npActivity?.npPendingStart?.path == medium.path
+            root.findViewById<View>(R.id.np_start_frame)?.beVisibleIf(npIsStart)
+            root.findViewById<View>(R.id.np_start_badge)?.beVisibleIf(npIsStart)
 
             favorite.beVisibleIf(medium.isFavorite && config.markFavoriteItems)
 
@@ -816,31 +837,37 @@ class MediaAdapter(
     }
 
     private fun setupSection(view: View, section: ThumbnailSection) {
+        val souvenir = (activity as? MediaActivity)?.npSouvenirLayout() == true
         ThumbnailSectionBinding.bind(view).apply {
             thumbnailSection.text = section.title
             thumbnailSection.setTextColor(textColor)
+            thumbnailSection.gravity = if (souvenir) android.view.Gravity.CENTER_HORIZONTAL else android.view.Gravity.START
+            thumbnailSection.setTypeface(null, if (souvenir) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+            thumbnailSection.setTextSize(TypedValue.COMPLEX_UNIT_SP, if (souvenir) 14f else 15f)
         }
     }
 
     private fun setupJalonHeader(view: View, section: ThumbnailSection) {
         val info = NpJalons.infoOf(section.title) ?: return
         val npActivity = activity as? MediaActivity
+        val souvenir = npActivity?.npSouvenirLayout() == true
+        val ink = if (souvenir) 0xFF111111.toInt() else textColor
         NpJalonHeaderBinding.bind(view).apply {
-            npJalonTitle.text = info.name
-            npJalonTitle.setTextColor(textColor)
-            npJalonTitle.beVisibleIf(info.name.isNotEmpty())
+            if (info.name.isNotEmpty()) {
+                npJalonTitle.text = info.name
+                npJalonTitle.alpha = 1f
+                npJalonTitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
+            } else {
+                npJalonTitle.setText(R.string.np_add_title)
+                npJalonTitle.alpha = 0.4f
+                npJalonTitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+            }
+            npJalonTitle.setTextColor(ink)
             val count = if (info.count > 1) activity.getString(R.string.np_items, info.count) else activity.getString(R.string.np_item)
             npJalonMeta.text = "${info.range} \u00B7 $count"
-            npJalonMeta.setTextColor(textColor)
-            val cards = NpSettings.style(activity) == NpSettings.STYLE_CARDS
-            npJalonOpen.setImageResource(
-                when {
-                    info.focused -> R.drawable.ic_np_collapse
-                    cards -> R.drawable.ic_np_expand
-                    else -> R.drawable.ic_np_chevron_right
-                }
-            )
-            npJalonOpen.setColorFilter(textColor)
+            npJalonMeta.setTextColor(ink)
+            npJalonOpen.setImageResource(if (info.focused) R.drawable.ic_np_collapse else R.drawable.ic_np_expand)
+            npJalonOpen.setColorFilter(ink)
             npJalonOpen.setOnClickListener { npActivity?.npToggleFocus(info.cutPath) }
             npJalonRemove.setOnClickListener { npActivity?.npRemoveJalon(info.cutPath) }
             npJalonTexts.setOnClickListener { npActivity?.npEditJalon(info.cutPath) }

@@ -48,6 +48,33 @@
             tools:visibility="visible" />
     </LinearLayout>
 
+    <View
+        android:id="@+id/np_start_frame"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_alignBottom="@id/medium_thumbnail"
+        android:layout_alignTop="@id/medium_thumbnail"
+        android:background="@drawable/np_start_frame"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/np_start_badge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentStart="true"
+        android:layout_alignParentTop="true"
+        android:layout_margin="6dp"
+        android:background="@drawable/np_start_badge_bg"
+        android:paddingStart="6dp"
+        android:paddingTop="3dp"
+        android:paddingEnd="6dp"
+        android:paddingBottom="3dp"
+        android:text="@string/np_start"
+        android:textColor="#FFFFFFFF"
+        android:textSize="9sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
     <ImageView
         android:id="@+id/medium_check"
         android:layout_width="@dimen/selection_check_size"

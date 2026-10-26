@@ -31,6 +31,12 @@
         android:background="@drawable/gradient_background_flipped"
         android:contentDescription="@null" />
 
+    <include
+        android:id="@+id/np_info_sheet"
+        layout="@layout/np_info_sheet"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
     <com.google.android.material.appbar.AppBarLayout
         android:id="@+id/medium_viewer_appbar"
         android:layout_width="match_parent"

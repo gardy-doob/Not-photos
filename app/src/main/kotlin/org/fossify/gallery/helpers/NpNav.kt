@@ -50,20 +50,11 @@ object NpNav {
         val intent = when (tab) {
             NP_TAB_FOLDERS -> Intent(context, MainActivity::class.java)
             NP_TAB_JALONS -> Intent(context, JalonsActivity::class.java)
-            NP_TAB_ALL -> Intent(context, MediaActivity::class.java).apply {
+            // Galerie, Vidéos et Toutes chargent tous les dossiers ; le tri par onglet se fait à l'affichage
+            else -> Intent(context, MediaActivity::class.java).apply {
                 putExtra(DIRECTORY, "")
                 putExtra(NP_FORCE_SHOW_ALL, true)
-            }
-
-            NP_TAB_VIDEOS -> Intent(context, MediaActivity::class.java).apply {
-                putExtra(DIRECTORY, cameraPath(context))
-                putExtra(NP_ONLY_VIDEOS, true)
-                if (cameraPath(context).isEmpty()) putExtra(NP_FORCE_SHOW_ALL, true)
-            }
-
-            else -> Intent(context, MediaActivity::class.java).apply {
-                putExtra(DIRECTORY, cameraPath(context))
-                if (cameraPath(context).isEmpty()) putExtra(NP_FORCE_SHOW_ALL, true)
+                if (tab == NP_TAB_VIDEOS) putExtra(NP_ONLY_VIDEOS, true)
             }
         }
         intent.putExtra(NP_TAB, tab)

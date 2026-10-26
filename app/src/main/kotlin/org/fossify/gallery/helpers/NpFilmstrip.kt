@@ -124,7 +124,7 @@ class NpFilmstrip(
                 clipToOutline = true
                 outlineProvider = object : ViewOutlineProvider() {
                     override fun getOutline(view: View, outline: Outline) {
-                        outline.setRoundRect(0, 0, view.width, view.height, 4 * density)
+                        outline.setRoundRect(0, 0, view.width, view.height, 5 * density)
                     }
                 }
             }
@@ -156,6 +156,9 @@ class NpFilmstrip(
             } else {
                 null
             }
+            val inset = if (isCurrent) (2 * density).toInt() else 0
+            holder.image.setPadding(inset, inset, inset, inset)
+            holder.image.cropToPadding = true
 
             holder.itemView.setOnClickListener {
                 val pos = holder.bindingAdapterPosition

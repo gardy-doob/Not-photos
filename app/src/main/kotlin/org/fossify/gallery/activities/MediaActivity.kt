@@ -5,6 +5,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.os.Bundle
 import android.os.Handler
+import android.graphics.Color
 import android.view.View
 import android.view.ViewGroup
 import android.widget.RelativeLayout
@@ -210,7 +211,7 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
         setupEdgeToEdge(
             padTopSystem = listOf(binding.mediaGrid, binding.npTopButtons.root, binding.npStatusScrim),
             padBottomImeAndSystem = listOf(binding.mediaGrid),
-            moveBottomSystem = listOf(binding.npNav.root)
+            moveBottomSystem = listOf(binding.npNav.root, binding.npSouvenirBar.root)
         )
         binding.npStatusScrim.background = android.graphics.drawable.GradientDrawable(
             android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
@@ -242,6 +243,7 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
     }
 
     private var npLastStyle = -1
+    private var npLastCount = -1
 
     override fun onResume() {
         super.onResume()
@@ -252,6 +254,16 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
             getMediaAdapter()?.notifyDataSetChanged()
         }
         npLastStyle = npStyle
+        if (npPendingStart != null && !binding.npSouvenirBar.root.isVisible()) {
+            npShowPendingBar()
+            getMediaAdapter()?.notifyDataSetChanged()
+        } else if (npPendingStart == null && binding.npSouvenirBar.root.isVisible()) {
+            binding.npSouvenirBar.root.beGone()
+        }
+        if (NpJalons.all(this).size != npLastCount) {
+            npLastCount = NpJalons.all(this).size
+            if (getMediaAdapter() != null) npRefreshJalons()
+        }
         if (mStoredAnimateGifs != config.animateGifs) {
             getMediaAdapter()?.updateAnimateGifs(config.animateGifs)
         }
@@ -362,10 +374,13 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
         return if (binding.mediaMenu.isSearchOpen) {
             binding.mediaMenu.closeSearch()
             true
+        } else if (npPendingStart != null) {
+            npCancelPending()
+            true
         } else if (npFocusCut != null) {
             npToggleFocus(npFocusCut!!)
             true
-        } else if (npTab == NP_TAB_VIDEOS) {
+        } else if (npTab == NP_TAB_VIDEOS || (npTab == NP_TAB_ALL && npForceShowAll)) {
             npSwitchInPlace(NP_TAB_GALLERY)
             true
         } else {
@@ -571,6 +586,26 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
 
     private fun npShowJalons() = npJalonsActive() && NpSettings.showJalons(this)
 
+    /** Mode « Souvenirs » de la maquette : fond noir, photos libres serrées, souvenirs en cartes blanches. */
+    fun npSouvenirLayout() = npShowJalons() && NpSettings.style(this) == NpSettings.STYLE_CARDS
+
+    /** Photo de début choisie (double tap), en attente de la photo de fin. */
+    var npPendingStart: Medium?
+        get() = NpJalons.pendingStart
+        private set(value) {
+            NpJalons.pendingStart = value
+        }
+
+    fun npSpanSize(position: Int, spanCount: Int): Int {
+        val adapter = getMediaAdapter()
+        if (adapter?.isASectionTitle(position) == true) return spanCount
+        if (!npSouvenirLayout()) return 1
+        val code = NpJalons.lastLayout.getOrElse(position) { 0 }
+        return if (code >= 10) 2 else 1
+    }
+
+    fun npGridColumns() = if (npSouvenirLayout()) 6 else config.mediaColumnCnt
+
     private fun npSetupNav() {
         NpNav.setup(
             activity = this,
@@ -585,13 +620,15 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
         )
     }
 
-    /** Galerie ↔ Vidéos sans changer d'écran : les vignettes glissent vers leur nouvelle place. */
+    /** Galerie ↔ Vidéos ↔ Toutes sans changer d'écran : les vignettes glissent vers leur nouvelle place. */
     private fun npSwitchInPlace(tab: String): Boolean {
-        val sameFolder = (npTab == NP_TAB_GALLERY || npTab == NP_TAB_VIDEOS) && !npForceShowAll
-        if (!sameFolder || (tab != NP_TAB_GALLERY && tab != NP_TAB_VIDEOS)) return false
+        if (!npForceShowAll || !org.fossify.gallery.helpers.NpGallery.isGalleryTab(npTab) || !org.fossify.gallery.helpers.NpGallery.isGalleryTab(tab)) return false
+        val wasSouvenir = npSouvenirLayout()
         npTab = tab
         npOnlyVideos = tab == NP_TAB_VIDEOS
         npFocusCut = null
+        npCancelPending()
+        if (wasSouvenir != npSouvenirLayout()) setupLayoutManager()
         npSetupNav()
         npApplyGridStyle()
         npRefreshJalons()
@@ -617,51 +654,131 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
         binding.mediaGrid.addItemDecoration(
             NpJalonDecoration(
                 styleOf = { NpSettings.style(this) },
-                enabled = { npShowJalons() && NpJalons.lastRanges.isNotEmpty() },
+                enabled = { npShowJalons() },
                 background = { getProperBackgroundColor() }
             )
         )
         npApplyGridStyle()
     }
 
-    /** Marges de la grille selon l'affichage des jalons (frise : place pour la ligne ; cartes : bords). */
+    /** Marges, fond et colonnes de la grille selon l'affichage des souvenirs. */
     private fun npApplyGridStyle() {
         val density = resources.displayMetrics.density
+        val souvenir = npSouvenirLayout()
         val (start, end) = when {
-            !npShowJalons() -> 0 to 0
-            NpSettings.style(this) == NpSettings.STYLE_CARDS -> (12 * density).toInt() to (12 * density).toInt()
+            !npShowJalons() || souvenir -> 0 to 0
             else -> (36 * density).toInt() to (6 * density).toInt()
         }
         binding.mediaGrid.setPaddingRelative(start, binding.mediaGrid.paddingTop, end, binding.mediaGrid.paddingBottom)
+
+        // fond noir en mode Souvenirs : on voit tout de suite que les souvenirs sont affichés
+        val bg = if (souvenir) Color.BLACK else getProperBackgroundColor()
+        binding.mediaCoordinator.setBackgroundColor(bg)
+        window.decorView.setBackgroundColor(bg)
+        binding.npStatusScrim.background = android.graphics.drawable.GradientDrawable(
+            android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+            intArrayOf(androidx.core.graphics.ColorUtils.setAlphaComponent(bg, 0xE6), 0)
+        )
+        androidx.core.view.WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars =
+            androidx.core.graphics.ColorUtils.calculateLuminance(bg) > 0.5
+        getMediaAdapter()?.updateTextColor(if (souvenir) Color.WHITE else getProperTextColor())
+
+        // l'espacement de Fossify suppose une seule taille de case : on le retire en mode Souvenirs
+        if (souvenir) {
+            npGridDecoration()?.let { binding.mediaGrid.removeItemDecoration(it) }
+        } else {
+            handleGridSpacing()
+        }
+        (binding.mediaGrid.layoutManager as? GridLayoutManager)?.let {
+            if (it.spanCount != npGridColumns()) it.spanCount = npGridColumns()
+        }
         binding.mediaGrid.invalidateItemDecorations()
     }
 
     private fun npDecorate(list: ArrayList<ThumbnailItem>): ArrayList<ThumbnailItem> {
         var items: List<ThumbnailItem> = list
-        if (npOnlyVideos) {
+        if (npForceShowAll && (npTab == NP_TAB_GALLERY || npTab == NP_TAB_VIDEOS)) {
+            val kept = org.fossify.gallery.helpers.NpGallery.filter(this, npTab, items.filterIsInstance<Medium>()).map { it.path }.toHashSet()
+            items = NpJalons.dropEmptySections(items.filter { it !is Medium || kept.contains(it.path) })
+        } else if (npOnlyVideos) {
             items = NpJalons.dropEmptySections(items.filter { it !is Medium || it.isVideo() })
         }
         return if (npShowJalons()) {
             NpJalons.decorate(this, items, npFocusCut)
         } else {
-            ArrayList(items.filterNot { it is ThumbnailSection && NpJalons.isJalonTitle(it.title) })
+            NpJalons.plain(items)
         }
     }
 
+    /** Double tap : choisir le début d'un souvenir, puis toucher la photo de fin. */
     fun npCutAt(medium: Medium) {
         if (!npJalonsActive()) return
-        if (NpJalons.add(this, medium)) {
+        val pending = npPendingStart
+        if (pending == null) {
+            if (NpJalons.cutOf(this, medium) != null) {
+                toast(R.string.np_souvenir_inside)
+                return
+            }
+            npPendingStart = medium
             binding.mediaGrid.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
             if (!NpSettings.showJalons(this)) {
                 NpSettings.setShowJalons(this, true)
                 npSetupNav()
                 npApplyGridStyle()
+                npRefreshJalons()
             }
-            toast(getString(R.string.np_jalon_created, NpJalons.timeLabel(NpJalons.timeOf(medium))))
-            npRefreshJalons()
+            npShowPendingBar()
+            getMediaAdapter()?.notifyDataSetChanged()
         } else {
-            toast(R.string.np_jalon_exists)
+            npFinishSouvenir(medium)
         }
+    }
+
+    /** Toucher une photo pendant qu'un début est choisi : c'est la fin du souvenir. */
+    fun npFinishSouvenir(end: Medium) {
+        val start = npPendingStart ?: return
+        when (NpJalons.add(this, start, end)) {
+            NpJalons.AddResult.SAME -> {
+                npCancelPending()
+                return
+            }
+
+            NpJalons.AddResult.OVERLAP -> {
+                toast(R.string.np_souvenir_overlap)
+                return
+            }
+
+            NpJalons.AddResult.OK -> {
+                binding.mediaGrid.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                npPendingStart = null
+                npHidePendingBar()
+                npRefreshJalons()
+                getMediaAdapter()?.notifyDataSetChanged()
+            }
+        }
+    }
+
+    fun npCancelPending() {
+        if (npPendingStart == null) return
+        npPendingStart = null
+        npHidePendingBar()
+        getMediaAdapter()?.notifyDataSetChanged()
+    }
+
+    private fun npShowPendingBar() {
+        val start = npPendingStart ?: return
+        val bar = binding.npSouvenirBar
+        bar.npSouvenirBarText.text = getString(R.string.np_souvenir_pending, NpJalons.timeLabel(NpJalons.timeOf(start)))
+        bar.npSouvenirBarCancel.setOnClickListener { npCancelPending() }
+        bar.root.alpha = 0f
+        bar.root.translationY = 24 * resources.displayMetrics.density
+        bar.root.beVisible()
+        bar.root.animate().alpha(1f).translationY(0f).setDuration(220).start()
+    }
+
+    private fun npHidePendingBar() {
+        val bar = binding.npSouvenirBar.root
+        bar.animate().alpha(0f).translationY(24 * resources.displayMetrics.density).setDuration(180).withEndAction { bar.beGone() }.start()
     }
 
     fun npEditJalon(cutPath: String) {
@@ -1088,16 +1205,9 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
             )
         }
 
-        layoutManager.spanCount = config.mediaColumnCnt
-        val adapter = getMediaAdapter()
+        layoutManager.spanCount = npGridColumns()
         layoutManager.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
-            override fun getSpanSize(position: Int): Int {
-                return if (adapter?.isASectionTitle(position) == true) {
-                    layoutManager.spanCount
-                } else {
-                    1
-                }
-            }
+            override fun getSpanSize(position: Int): Int = npSpanSize(position, layoutManager.spanCount)
         }
     }
 
@@ -1114,6 +1224,10 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
 
     private fun handleGridSpacing(media: ArrayList<ThumbnailItem> = mMedia) {
         val viewType = config.getFolderViewType(if (mShowAll) SHOW_ALL else mPath)
+        if (npSouvenirLayout()) {
+            npGridDecoration()?.let { binding.mediaGrid.removeItemDecoration(it) }
+            return
+        }
         if (viewType == VIEW_TYPE_GRID) {
             val spanCount = config.mediaColumnCnt
             val spacing = config.thumbnailSpacing
@@ -1267,6 +1381,7 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
             putExtra(SHOW_FAVORITES, mPath == FAVORITES)
             putExtra(SHOW_RECYCLE_BIN, mPath == RECYCLE_BIN)
             putExtra(IS_FROM_GALLERY, true)
+            if (npForceShowAll) putExtra(NP_TAB, npTab)
             startActivity(this)
         }
     }

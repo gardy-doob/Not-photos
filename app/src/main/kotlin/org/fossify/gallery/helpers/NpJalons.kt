@@ -11,26 +11,37 @@ import java.util.Calendar
 import java.util.Locale
 
 /**
- * Jalons Aura : un jalon commence à une photo (son « point de coupe ») et regroupe toutes les
- * photos prises ensuite — y compris les jours suivants — jusqu'au jalon suivant.
- * Les photos plus anciennes que le tout premier jalon n'appartiennent à aucun jalon.
- * Les points de coupe sont stockés localement (préférences) sous forme de liste JSON.
+ * Souvenirs Aura : un souvenir va d'une photo de début à une photo de fin (incluses), y compris
+ * sur plusieurs jours. Toutes les photos prises entre les deux en font partie. Les souvenirs ne
+ * se chevauchent pas. Les photos hors souvenir restent « libres ».
+ * Les souvenirs sont stockés localement (préférences) sous forme de liste JSON.
  */
 object NpJalons {
-    /** Préfixe des en-têtes de jalon insérés dans la grille. */
+    /** Préfixe des en-têtes de souvenir insérés dans la grille. */
     const val PREFIX = "✂"
     private const val SEP = "\u001F"
-    private const val PREFS = "np_jalons"
-    private const val KEY_CUTS = "cuts"
+    private const val PREFS = "np_souvenirs"
+    private const val KEY = "souvenirs"
 
-    data class Cut(val path: String, var name: String, val taken: Long)
+    data class Cut(val path: String, val endPath: String, var name: String, val taken: Long, val endTaken: Long)
 
-    /** Ce qu'affiche un en-tête de jalon. */
+    /** Ce qu'affiche un en-tête de souvenir. */
     data class Info(val cutPath: String, val name: String, val range: String, val count: Int, val focused: Boolean)
 
-    /** Positions (dans la liste affichée) couvertes par chaque jalon : en-tête → dernière photo. */
+    /** Positions (dans la liste affichée) couvertes par chaque souvenir : en-tête → dernière photo. */
     var lastRanges: List<IntRange> = emptyList()
         private set
+
+    /**
+     * Mise en page de la liste affichée, case par case :
+     * -1 = titre (date ou souvenir), 0..5 = colonne d'une photo libre (6 colonnes),
+     * 10..12 = colonne d'une photo de souvenir (3 colonnes).
+     */
+    var lastLayout: IntArray = IntArray(0)
+        private set
+
+    /** Photo de début choisie, en attente de la photo de fin (partagée entre Galerie et visionneuse). */
+    var pendingStart: Medium? = null
 
     private var cache: MutableList<Cut>? = null
     private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
@@ -40,11 +51,11 @@ object NpJalons {
         cache?.let { return it }
         val list = ArrayList<Cut>()
         try {
-            val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_CUTS, "[]") ?: "[]"
+            val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, "[]") ?: "[]"
             val array = JSONArray(raw)
             for (i in 0 until array.length()) {
                 val o = array.getJSONObject(i)
-                list.add(Cut(o.getString("path"), o.optString("name", ""), o.optLong("taken", 0L)))
+                list.add(Cut(o.getString("path"), o.getString("end"), o.optString("name", ""), o.getLong("taken"), o.getLong("endTaken")))
             }
         } catch (ignored: Exception) {
         }
@@ -55,19 +66,36 @@ object NpJalons {
     private fun save(context: Context) {
         val array = JSONArray()
         all(context).forEach {
-            array.put(JSONObject().put("path", it.path).put("name", it.name).put("taken", it.taken))
+            array.put(
+                JSONObject().put("path", it.path).put("end", it.endPath).put("name", it.name)
+                    .put("taken", it.taken).put("endTaken", it.endTaken)
+            )
         }
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY_CUTS, array.toString()).apply()
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, array.toString()).apply()
     }
 
-    fun isCut(context: Context, path: String) = all(context).any { it.path == path }
+    fun timeOf(medium: Medium) = if (medium.taken > 0L) medium.taken else medium.modified
 
-    /** Ajoute un point de coupe ; renvoie false s'il existait déjà. */
-    fun add(context: Context, medium: Medium): Boolean {
-        if (isCut(context, medium.path)) return false
-        all(context).add(Cut(medium.path, "", timeOf(medium)))
+    fun timeLabel(ts: Long): String = timeFormat.format(ts)
+
+    fun cutOf(context: Context, medium: Medium): Cut? {
+        val t = timeOf(medium)
+        return all(context).firstOrNull { t >= it.taken && t <= it.endTaken }
+    }
+
+    enum class AddResult { OK, OVERLAP, SAME }
+
+    /** Crée un souvenir entre deux photos (dans n'importe quel ordre). */
+    fun add(context: Context, a: Medium, b: Medium): AddResult {
+        if (a.path == b.path) return AddResult.SAME
+        val (first, last) = if (timeOf(a) <= timeOf(b)) a to b else b to a
+        val start = timeOf(first)
+        val end = timeOf(last)
+        if (all(context).any { !(end < it.taken || start > it.endTaken) }) return AddResult.OVERLAP
+        all(context).add(Cut(first.path, last.path, "", start, end))
+        all(context).sortBy { it.taken }
         save(context)
-        return true
+        return AddResult.OK
     }
 
     fun remove(context: Context, path: String) {
@@ -79,10 +107,6 @@ object NpJalons {
         all(context).firstOrNull { it.path == path }?.name = name.trim()
         save(context)
     }
-
-    fun timeOf(medium: Medium) = if (medium.taken > 0L) medium.taken else medium.modified
-
-    fun timeLabel(ts: Long): String = timeFormat.format(ts)
 
     private fun sameDay(a: Long, b: Long): Boolean {
         val ca = Calendar.getInstance().apply { timeInMillis = a }
@@ -98,34 +122,21 @@ object NpJalons {
         }
     }
 
-    /** Pour chaque photo, le jalon auquel elle appartient (le dernier point de coupe qui la précède). */
+    /** Pour chaque photo, le souvenir auquel elle appartient. */
     fun groupsOf(context: Context, media: List<Medium>): Map<String, Cut> {
-        val cuts = all(context).sortedBy { it.taken }
+        val cuts = all(context)
         if (cuts.isEmpty()) return emptyMap()
-        val times = LongArray(cuts.size) { cuts[it].taken }
-        val result = HashMap<String, Cut>(media.size)
+        val result = HashMap<String, Cut>()
         media.forEach { m ->
             val t = timeOf(m)
-            var lo = 0
-            var hi = times.size - 1
-            var found = -1
-            while (lo <= hi) {
-                val mid = (lo + hi) ushr 1
-                if (times[mid] <= t) {
-                    found = mid
-                    lo = mid + 1
-                } else {
-                    hi = mid - 1
-                }
-            }
-            if (found >= 0) result[m.path] = cuts[found]
+            cuts.firstOrNull { t >= it.taken && t <= it.endTaken }?.let { result[m.path] = it }
         }
         return result
     }
 
     fun isJalonTitle(title: String) = title.startsWith(PREFIX)
 
-    /** Identité stable d'un en-tête (pour les animations) : le chemin du point de coupe. */
+    /** Identité stable d'un en-tête (pour les animations) : la photo de début. */
     fun keyOf(title: String) = title.substringBefore(SEP)
 
     fun infoOf(title: String): Info? {
@@ -136,8 +147,8 @@ object NpJalons {
     }
 
     /**
-     * Insère un en-tête avant la première photo affichée de chaque jalon.
-     * [focusCut] : n'afficher que les photos de ce jalon.
+     * Insère un en-tête avant la première photo affichée de chaque souvenir.
+     * [focusCut] : n'afficher que les photos de ce souvenir.
      */
     fun decorate(context: Context, items: List<ThumbnailItem>, focusCut: String?): ArrayList<ThumbnailItem> {
         var clean: List<ThumbnailItem> = items.filterNot { it is ThumbnailSection && isJalonTitle(it.title) }
@@ -146,11 +157,6 @@ object NpJalons {
         if (focusCut != null) {
             clean = clean.filter { it !is Medium || groups[it.path]?.path == focusCut }
             clean = dropEmptySections(clean)
-        }
-
-        if (groups.isEmpty()) {
-            lastRanges = emptyList()
-            return ArrayList(clean)
         }
 
         val members = HashMap<String, MutableList<Medium>>()
@@ -180,7 +186,7 @@ object NpJalons {
                 if (cut != null && seen.add(cut.path)) {
                     val list = members[cut.path].orEmpty()
                     val times = list.map { timeOf(it) }
-                    val range = rangeLabel(times.minOrNull() ?: cut.taken, times.maxOrNull() ?: cut.taken)
+                    val range = rangeLabel(times.minOrNull() ?: cut.taken, times.maxOrNull() ?: cut.endTaken)
                     val title = PREFIX + cut.path + SEP + list.size + SEP + range + SEP + cut.name + SEP + (if (focusCut != null) "1" else "0")
                     rangeStart = result.size
                     result.add(ThumbnailSection(title))
@@ -188,11 +194,46 @@ object NpJalons {
                 result.add(item)
                 if (cut != null) rangeEnd = result.size - 1
             } else {
+                // un titre de date au milieu d'un souvenir ne le coupe pas
                 result.add(item)
             }
         }
         closeRange()
         lastRanges = ranges
+        lastLayout = layoutOf(result, ranges)
+        return result
+    }
+
+    private fun layoutOf(items: List<ThumbnailItem>, ranges: List<IntRange>): IntArray {
+        val layout = IntArray(items.size)
+        var freeCol = 0
+        var cardCol = 0
+        var r = 0
+        items.forEachIndexed { i, item ->
+            while (r < ranges.size && i > ranges[r].last) r++
+            val inCard = r < ranges.size && i in ranges[r]
+            if (item is ThumbnailSection) {
+                layout[i] = -1
+                freeCol = 0
+                cardCol = 0
+            } else if (inCard) {
+                layout[i] = 10 + cardCol
+                cardCol = (cardCol + 1) % 3
+                freeCol = 0
+            } else {
+                layout[i] = freeCol
+                freeCol = (freeCol + 1) % 6
+                cardCol = 0
+            }
+        }
+        return layout
+    }
+
+    /** Liste sans souvenirs mais avec la même mise en page de photos libres. */
+    fun plain(items: List<ThumbnailItem>): ArrayList<ThumbnailItem> {
+        val result = ArrayList(items.filterNot { it is ThumbnailSection && isJalonTitle(it.title) })
+        lastRanges = emptyList()
+        lastLayout = layoutOf(result, emptyList())
         return result
     }
 
@@ -208,7 +249,7 @@ object NpJalons {
         return result
     }
 
-    /** Positions de la bande de miniatures où un jalon commence. */
+    /** Positions de la bande de miniatures où un souvenir commence ou se termine. */
     fun gapsBefore(context: Context, media: List<Medium>): Set<Int> {
         val groups = groupsOf(context, media)
         if (groups.isEmpty()) return emptySet()

@@ -17,7 +17,7 @@ object NpSettings {
 
     fun setShowJalons(context: Context, value: Boolean) = prefs(context).edit().putBoolean(KEY_SHOW_JALONS, value).apply()
 
-    fun style(context: Context) = prefs(context).getInt(KEY_STYLE, STYLE_TIMELINE)
+    fun style(context: Context) = prefs(context).getInt(KEY_STYLE, STYLE_CARDS)
 
     fun setStyle(context: Context, value: Int) = prefs(context).edit().putInt(KEY_STYLE, value).apply()
 }

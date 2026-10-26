@@ -1,69 +1,67 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/np_jalon_root"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:gravity="center_vertical"
-    android:minHeight="52dp"
-    android:orientation="horizontal"
-    android:paddingStart="10dp"
-    android:paddingTop="10dp"
-    android:paddingEnd="2dp"
-    android:paddingBottom="6dp">
+    android:minHeight="64dp"
+    android:paddingStart="4dp"
+    android:paddingTop="6dp"
+    android:paddingEnd="4dp"
+    android:paddingBottom="8dp">
+
+    <ImageView
+        android:id="@+id/np_jalon_open"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:layout_gravity="start|top"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:clickable="true"
+        android:contentDescription="@string/np_jalon"
+        android:focusable="true"
+        android:padding="7dp"
+        android:src="@drawable/ic_np_expand" />
 
     <LinearLayout
         android:id="@+id/np_jalon_texts"
-        android:layout_width="0dp"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_weight="1"
+        android:layout_marginStart="40dp"
+        android:layout_marginEnd="40dp"
         android:background="?attr/selectableItemBackground"
         android:clickable="true"
         android:focusable="true"
-        android:orientation="vertical"
-        android:paddingTop="2dp"
-        android:paddingBottom="2dp">
+        android:gravity="center_horizontal"
+        android:orientation="vertical">
 
         <TextView
             android:id="@+id/np_jalon_title"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:ellipsize="end"
             android:fontFamily="sans-serif-medium"
             android:maxLines="1"
-            android:ellipsize="end"
-            android:textSize="16sp" />
+            android:textSize="20sp"
+            android:textStyle="bold" />
 
         <TextView
             android:id="@+id/np_jalon_meta"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:alpha="0.65"
+            android:layout_marginTop="4dp"
+            android:alpha="0.6"
             android:maxLines="1"
-            android:textSize="13sp" />
+            android:textSize="12sp" />
     </LinearLayout>
 
-    <TextView
-        android:id="@+id/np_jalon_remove"
-        android:layout_width="wrap_content"
-        android:layout_height="40dp"
-        android:background="?attr/selectableItemBackgroundBorderless"
-        android:clickable="true"
-        android:focusable="true"
-        android:fontFamily="sans-serif-medium"
-        android:gravity="center"
-        android:paddingStart="10dp"
-        android:paddingEnd="10dp"
-        android:text="@string/np_remove"
-        android:textColor="#B3263A"
-        android:textSize="13sp" />
-
     <ImageView
-        android:id="@+id/np_jalon_open"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:background="?attr/selectableItemBackgroundBorderless"
+        android:id="@+id/np_jalon_remove"
+        android:layout_width="28dp"
+        android:layout_height="28dp"
+        android:layout_gravity="end|top"
+        android:background="@drawable/np_close_bg"
         android:clickable="true"
-        android:contentDescription="@string/np_jalon"
+        android:contentDescription="@string/np_remove"
         android:focusable="true"
-        android:padding="9dp"
-        android:src="@drawable/ic_np_chevron_right" />
-</LinearLayout>
+        android:padding="6dp"
+        android:src="@drawable/ic_np_close" />
+</FrameLayout>
