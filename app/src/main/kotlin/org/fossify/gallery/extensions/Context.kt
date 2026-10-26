@@ -90,7 +90,6 @@ import org.fossify.gallery.helpers.LOCATION_INTERNAL
 import org.fossify.gallery.helpers.LOCATION_OTG
 import org.fossify.gallery.helpers.LOCATION_SD
 import org.fossify.gallery.helpers.MediaFetcher
-import org.fossify.gallery.helpers.MyWidgetProvider
 import org.fossify.gallery.helpers.PicassoRoundedCornersTransformation
 import org.fossify.gallery.helpers.RECYCLE_BIN
 import org.fossify.gallery.helpers.ROUNDED_CORNERS_NONE
@@ -1108,20 +1107,6 @@ fun Context.deleteMediumWithPath(path: String) {
     try {
         mediaDB.deleteMediumPath(path)
     } catch (ignored: Exception) {
-    }
-}
-
-fun Context.updateWidgets() {
-    val widgetIDs = AppWidgetManager.getInstance(applicationContext)
-        ?.getAppWidgetIds(ComponentName(applicationContext, MyWidgetProvider::class.java))
-        ?: return
-
-    if (widgetIDs.isNotEmpty()) {
-        Intent(applicationContext, MyWidgetProvider::class.java).apply {
-            action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
-            putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, widgetIDs)
-            sendBroadcast(this)
-        }
     }
 }
 

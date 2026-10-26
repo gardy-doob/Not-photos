@@ -112,7 +112,6 @@ import org.fossify.gallery.extensions.removeInvalidDBDirectories
 import org.fossify.gallery.extensions.storeDirectoryItems
 import org.fossify.gallery.extensions.tryDeleteFileDirItem
 import org.fossify.gallery.extensions.updateDBDirectory
-import org.fossify.gallery.extensions.updateWidgets
 import org.fossify.gallery.helpers.DIRECTORY
 import org.fossify.gallery.helpers.GET_ANY_INTENT
 import org.fossify.gallery.helpers.GET_IMAGE_INTENT
@@ -262,12 +261,7 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
             config.sorting = config.sorting or SORT_USE_NUMERIC_VALUE
         }
 
-        updateWidgets()
         registerFileUpdateListener()
-
-        binding.directoriesSwitchSearching.setOnClickListener {
-            launchSearchActivity()
-        }
 
         // just request the permission, tryLoadGallery will then trigger in onResume
         handleMediaPermissions()
@@ -480,17 +474,10 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
         binding.mainMenu.toggleHideOnScroll(!config.scrollHorizontally)
         binding.mainMenu.setupMenu()
 
-        binding.mainMenu.onSearchOpenListener = {
-            if (config.searchAllFilesByDefault) {
-                launchSearchActivity()
-            }
-        }
-
         binding.mainMenu.onSearchTextChangedListener = { text ->
             setupAdapter(mDirsIgnoringSearch, text)
             binding.directoriesRefreshLayout.isEnabled =
                 text.isEmpty() && config.enablePullToRefresh
-            binding.directoriesSwitchSearching.beVisibleIf(text.isNotEmpty())
         }
 
         binding.mainMenu.requireToolbar().setOnMenuItemClickListener { menuItem ->
@@ -635,17 +622,6 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
         getCachedDirectories(getVideos && !getImages, getImages && !getVideos) {
             gotDirectories(addTempFolderIfNeeded(it))
         }
-    }
-
-    private fun launchSearchActivity() {
-        hideKeyboard()
-        Intent(this, SearchActivity::class.java).apply {
-            startActivity(this)
-        }
-
-        binding.mainMenu.postDelayed({
-            binding.mainMenu.closeSearch()
-        }, 500)
     }
 
     private fun showSortingDialog() {

@@ -85,7 +85,6 @@ import org.fossify.gallery.extensions.restoreRecycleBinPaths
 import org.fossify.gallery.extensions.showRecycleBinEmptyingDialog
 import org.fossify.gallery.extensions.showRestoreConfirmationDialog
 import org.fossify.gallery.extensions.tryDeleteFileDirItem
-import org.fossify.gallery.extensions.updateWidgets
 import org.fossify.gallery.helpers.DIRECTORY
 import org.fossify.gallery.helpers.GET_ANY_INTENT
 import org.fossify.gallery.helpers.GET_IMAGE_INTENT
@@ -188,7 +187,6 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
             showFilterMediaDialog()
         }
 
-        updateWidgets()
     }
 
     override fun onStart() {
