@@ -250,6 +250,7 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
             android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
             intArrayOf(androidx.core.graphics.ColorUtils.setAlphaComponent(getProperBackgroundColor(), 0xE6), 0)
         )
+        org.fossify.gallery.helpers.NpCrash.showIfAny(this)
         binding.npTopButtons.npBurger.setOnClickListener {
             refreshMenuItems()
             NpBurger.show(this, it, binding.mainMenu.requireToolbar().menu)

@@ -224,6 +224,7 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
             npSetupNav()
         }
         npSetupGrid()
+        org.fossify.gallery.helpers.NpCrash.showIfAny(this)
 
         if (mShowAll) {
             registerFileUpdateListener()
@@ -596,6 +597,14 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
         npRefreshJalons()
         binding.mediaGrid.scrollToPosition(0)
         return true
+    }
+
+    /** L'espacement de grille de Fossify, quelle que soit sa position parmi les décorations. */
+    private fun npGridDecoration(): GridSpacingItemDecoration? {
+        for (i in 0 until binding.mediaGrid.itemDecorationCount) {
+            (binding.mediaGrid.getItemDecorationAt(i) as? GridSpacingItemDecoration)?.let { return it }
+        }
+        return null
     }
 
     private fun npSetupGrid() {
@@ -1110,12 +1119,8 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
             val spacing = config.thumbnailSpacing
             val useGridPosition = media.firstOrNull() is ThumbnailSection
 
-            var currentGridDecoration: GridSpacingItemDecoration? = null
-            if (binding.mediaGrid.itemDecorationCount > 0) {
-                currentGridDecoration =
-                    binding.mediaGrid.getItemDecorationAt(0) as GridSpacingItemDecoration
-                currentGridDecoration.items = media
-            }
+            val currentGridDecoration = npGridDecoration()
+            currentGridDecoration?.items = media
 
             val newGridDecoration = GridSpacingItemDecoration(
                 spanCount = spanCount,
@@ -1401,11 +1406,7 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
             }
         }
 
-        if (binding.mediaGrid.itemDecorationCount > 0) {
-            val currentGridDecoration =
-                binding.mediaGrid.getItemDecorationAt(0) as GridSpacingItemDecoration
-            currentGridDecoration.items = media
-        }
+        npGridDecoration()?.items = media
     }
 
     private fun setAsDefaultFolder() {
