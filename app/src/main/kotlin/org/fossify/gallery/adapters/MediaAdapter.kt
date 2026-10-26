@@ -5,6 +5,8 @@ import android.content.pm.ShortcutInfo
 import android.content.pm.ShortcutManager
 import android.graphics.drawable.Icon
 import android.view.Menu
+import android.os.SystemClock
+import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
@@ -92,6 +94,8 @@ import org.fossify.gallery.interfaces.MediaOperationsListener
 import org.fossify.gallery.models.Medium
 import org.fossify.gallery.models.ThumbnailItem
 import org.fossify.gallery.models.ThumbnailSection
+import org.fossify.gallery.activities.MediaActivity
+import org.fossify.gallery.helpers.NpJalons
 
 class MediaAdapter(
     activity: BaseSimpleActivity,
@@ -163,7 +167,54 @@ class MediaAdapter(
                 setupSection(itemView, tmbItem as ThumbnailSection)
             }
         }
+
+        // Not Photos : double tap ou appui long sur une photo = nouveau jalon
+        val npActivity = activity as? MediaActivity
+        if (tmbItem is Medium && !isAGetIntent && npActivity?.npJalonsActive() == true) {
+            holder.itemView.setOnLongClickListener {
+                if (actModeCallback.isSelectable) {
+                    holder.viewLongClicked()
+                } else {
+                    npPendingOpen?.let { recyclerView.removeCallbacks(it) }
+                    npActivity.npCutAt(tmbItem)
+                }
+                true
+            }
+            holder.itemView.setOnClickListener {
+                if (actModeCallback.isSelectable) {
+                    holder.viewClicked(tmbItem)
+                } else {
+                    npTap(holder, tmbItem, npActivity)
+                }
+            }
+        } else if (tmbItem is ThumbnailSection && tmbItem.title.startsWith(NpJalons.PREFIX)) {
+            holder.itemView.setOnClickListener { npActivity?.npEditJalon(tmbItem.title) }
+        }
         bindViewHolder(holder)
+    }
+
+    private var npLastTapPath: String? = null
+    private var npLastTapTime = 0L
+    private var npPendingOpen: Runnable? = null
+
+    private fun npTap(holder: MyRecyclerViewAdapter.ViewHolder, medium: Medium, npActivity: MediaActivity) {
+        val now = SystemClock.uptimeMillis()
+        npPendingOpen?.let { recyclerView.removeCallbacks(it) }
+        npPendingOpen = null
+        if (npLastTapPath == medium.path && now - npLastTapTime < 300) {
+            npLastTapPath = null
+            npActivity.npCutAt(medium)
+            return
+        }
+
+        npLastTapPath = medium.path
+        npLastTapTime = now
+        val open = Runnable {
+            npPendingOpen = null
+            holder.viewClicked(medium)
+        }
+        npPendingOpen = open
+        recyclerView.postDelayed(open, 250)
     }
 
     override fun getItemCount() = media.size
@@ -763,8 +814,35 @@ class MediaAdapter(
 
     private fun setupSection(view: View, section: ThumbnailSection) {
         ThumbnailSectionBinding.bind(view).apply {
-            thumbnailSection.text = section.title
-            thumbnailSection.setTextColor(textColor)
+            val isJalon = section.title.startsWith(NpJalons.PREFIX)
+            val isJalonEnd = section.title.startsWith(NpJalons.END_PREFIX)
+            thumbnailSection.text = section.title.replace("\u200B", "").trim()
+            when {
+                isJalon -> {
+                    thumbnailSection.setTextColor(0xFFB3263A.toInt())
+                    thumbnailSection.setTypeface(null, android.graphics.Typeface.BOLD)
+                    thumbnailSection.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+                    thumbnailSection.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+                    thumbnailSection.setBackgroundResource(org.fossify.gallery.R.drawable.np_jalon_section_bg)
+                }
+
+                isJalonEnd -> {
+                    thumbnailSection.setTextColor(textColor)
+                    thumbnailSection.alpha = 0.6f
+                    thumbnailSection.setTypeface(null, android.graphics.Typeface.NORMAL)
+                    thumbnailSection.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                    thumbnailSection.background = null
+                }
+
+                else -> {
+                    thumbnailSection.setTextColor(textColor)
+                    thumbnailSection.alpha = 1f
+                    thumbnailSection.setTypeface(null, android.graphics.Typeface.NORMAL)
+                    thumbnailSection.setTextSize(TypedValue.COMPLEX_UNIT_PX, activity.resources.getDimension(org.fossify.commons.R.dimen.bigger_text_size))
+                    thumbnailSection.background = null
+                }
+            }
+            if (isJalon) thumbnailSection.alpha = 1f
         }
     }
 

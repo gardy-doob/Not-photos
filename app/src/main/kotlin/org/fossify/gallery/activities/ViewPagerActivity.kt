@@ -173,6 +173,7 @@ import org.fossify.gallery.helpers.SLIDESHOW_SLIDE_DURATION
 import org.fossify.gallery.helpers.SLIDESHOW_START_ON_ENTER
 import org.fossify.gallery.helpers.NpFilmstrip
 import org.fossify.gallery.helpers.NpNav
+import org.fossify.gallery.helpers.NpJalons
 import org.fossify.gallery.helpers.TYPE_GIFS
 import org.fossify.gallery.helpers.TYPE_IMAGES
 import org.fossify.gallery.helpers.TYPE_PORTRAITS
@@ -978,10 +979,18 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
         binding.npViewerBottom.npBarFavoriteIcon.setImageResource(if (favorite) R.drawable.ic_np_star_filled else R.drawable.ic_np_star)
     }
 
-    private fun npGapsBefore(media: List<Medium>): Set<Int> = emptySet()
+    private fun npGapsBefore(media: List<Medium>): Set<Int> = NpJalons.gapsBefore(this, media)
 
     private fun npCutHere() {
-        NpNav.comingSoon(this)
+        val medium = getCurrentMedium() ?: return
+        if (NpJalons.add(this, medium)) {
+            binding.npViewerBottom.npBarJalon.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+            toast(getString(R.string.np_jalon_created, NpJalons.timeLabel(NpJalons.timeOf(medium))))
+            val media = getCurrentMedia()
+            npStrip?.setMedia(media.map { it.path }, npGapsBefore(media))
+        } else {
+            toast(R.string.np_jalon_exists)
+        }
     }
 
     private fun initBottomActionButtons() {

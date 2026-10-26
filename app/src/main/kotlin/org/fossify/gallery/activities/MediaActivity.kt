@@ -8,6 +8,8 @@ import android.os.Handler
 import android.view.ViewGroup
 import android.widget.RelativeLayout
 import androidx.core.net.toUri
+import android.view.HapticFeedbackConstants
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
@@ -94,6 +96,9 @@ import org.fossify.gallery.helpers.NP_TAB_FOLDERS
 import org.fossify.gallery.helpers.NP_TAB_GALLERY
 import org.fossify.gallery.helpers.NP_TAB_VIDEOS
 import org.fossify.gallery.helpers.NpNav
+import org.fossify.gallery.helpers.NpJalons
+import org.fossify.gallery.helpers.NpJalonDialog
+import org.fossify.gallery.helpers.NP_SCROLL_TO
 import org.fossify.gallery.helpers.GET_ANY_INTENT
 import org.fossify.gallery.helpers.GET_IMAGE_INTENT
 import org.fossify.gallery.helpers.GET_VIDEO_INTENT
@@ -135,6 +140,8 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
     private var npTab = NP_TAB_FOLDERS
     private var npOnlyVideos = false
     private var npForceShowAll = false
+    private var npScrollTo: String? = null
+    private var npRawMedia = ArrayList<ThumbnailItem>()
     private var mLoadedInitialPhotos = false
     private var mShowLoadingIndicator = true
     private var mWasFullscreenViewOpen = false
@@ -174,6 +181,7 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
             npOnlyVideos = getBooleanExtra(NP_ONLY_VIDEOS, false)
             npForceShowAll = getBooleanExtra(NP_FORCE_SHOW_ALL, false)
             npTab = getStringExtra(NP_TAB) ?: NP_TAB_FOLDERS
+            npScrollTo = getStringExtra(NP_SCROLL_TO)
         }
 
         binding.mediaRefreshLayout.setOnRefreshListener { getMedia() }
@@ -526,6 +534,61 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
     }
 
     private fun getMediaAdapter() = binding.mediaGrid.adapter as? MediaAdapter
+
+    // ---------- Not Photos : jalons ----------
+
+    fun npJalonsActive() = npTab != NP_TAB_VIDEOS && !(mIsGetImageIntent || mIsGetVideoIntent || mIsGetAnyIntent)
+
+    private fun npDecorate(list: ArrayList<ThumbnailItem>): ArrayList<ThumbnailItem> {
+        return if (npJalonsActive()) NpJalons.decorate(this, list) else list
+    }
+
+    fun npCutAt(medium: Medium) {
+        if (!npJalonsActive()) return
+        if (NpJalons.add(this, medium)) {
+            binding.mediaGrid.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+            toast(getString(R.string.np_jalon_created, NpJalons.timeLabel(NpJalons.timeOf(medium))))
+            npRefreshJalons()
+        } else {
+            toast(R.string.np_jalon_exists)
+        }
+    }
+
+    fun npEditJalon(title: String) {
+        val path = NpJalons.sectionToCut[title] ?: return
+        NpJalonDialog.show(this, path) { npRefreshJalons() }
+    }
+
+    private fun npKey(item: ThumbnailItem) = when (item) {
+        is Medium -> "m:" + item.path
+        is ThumbnailSection -> "s:" + item.title
+        else -> "x:" + item.hashCode()
+    }
+
+    /** Recalcule les en-têtes de jalons ; les photos glissent vers leur nouvelle place. */
+    private fun npRefreshJalons() {
+        val adapter = getMediaAdapter() ?: return
+        val oldList = adapter.media
+        val newList = npDecorate(npRawMedia.clone() as ArrayList<ThumbnailItem>)
+        val diff = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
+            override fun getOldListSize() = oldList.size
+            override fun getNewListSize() = newList.size
+            override fun areItemsTheSame(oldPos: Int, newPos: Int) = npKey(oldList[oldPos]) == npKey(newList[newPos])
+            override fun areContentsTheSame(oldPos: Int, newPos: Int) = oldList[oldPos] == newList[newPos]
+        })
+        mMedia = newList
+        adapter.media = newList.clone() as ArrayList<ThumbnailItem>
+        diff.dispatchUpdatesTo(adapter)
+    }
+
+    private fun npScrollToTarget() {
+        val target = npScrollTo ?: return
+        val index = mMedia.indexOfFirst { it is Medium && it.path == target }
+        if (index < 0) return
+        npScrollTo = null
+        val position = (index - 1).coerceAtLeast(0)
+        (binding.mediaGrid.layoutManager as? GridLayoutManager)?.scrollToPositionWithOffset(position, 0)
+    }
 
     private fun setupAdapter() {
         if (!mShowAll && isDirEmpty()) {
@@ -1038,7 +1101,8 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
     private fun gotMedia(media: ArrayList<ThumbnailItem>, isFromCache: Boolean) {
         mIsGettingMedia = false
         checkLastMediaChanged()
-        mMedia = media
+        npRawMedia = media
+        mMedia = npDecorate(media)
 
         runOnUiThread {
             binding.loadingIndicator.hide()
@@ -1051,6 +1115,7 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
             }
             binding.mediaFastscroller.beVisibleIf(binding.mediaEmptyTextPlaceholder.isGone())
             setupAdapter()
+            npScrollToTarget()
         }
 
         mLatestMediaId = getLatestMediaId()

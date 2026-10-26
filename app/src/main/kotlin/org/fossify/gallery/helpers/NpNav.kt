@@ -30,6 +30,9 @@ const val NP_ONLY_VIDEOS = "np_only_videos"
 /** Afficher tous les dossiers inclus, quel que soit le réglage global. */
 const val NP_FORCE_SHOW_ALL = "np_force_show_all"
 
+/** Faire défiler la Galerie jusqu'à cette photo à l'ouverture (depuis l'onglet Jalons). */
+const val NP_SCROLL_TO = "np_scroll_to"
+
 object NpNav {
     private val tabs = listOf(NP_TAB_GALLERY, NP_TAB_VIDEOS, NP_TAB_JALONS, NP_TAB_ALL, NP_TAB_FOLDERS)
 
