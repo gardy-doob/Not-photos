@@ -34,6 +34,7 @@ tapid() { local p; p=$(center "$1" "${2:-1}"); [ -n "$p" ] && adb shell input ta
 dtapid() { local p; p=$(center "$1" "${2:-1}"); if [ -n "$p" ]; then adb shell input tap $p; adb shell input tap $p; else MISSING="$MISSING dtap:$1#${2:-1}"; fi; }
 
 adb shell am force-stop com.google.android.apps.nexuslauncher || true
+adb shell settings put secure immersive_mode_confirmations confirmed || true
 sleep 2
 adb logcat -c
 adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null
