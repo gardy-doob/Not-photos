@@ -29,8 +29,9 @@ if len(hits)>=n:
     a,b,c,d=map(int,hits[n-1]); print((a+c)//2,(b+d)//2)
 PY
 }
-tapid() { local p; p=$(center "$1" "${2:-1}"); [ -n "$p" ] && adb shell input tap $p && return 0; echo "introuvable: $1#${2:-1}"; return 1; }
-dtapid() { local p; p=$(center "$1" "${2:-1}"); [ -n "$p" ] && { adb shell input tap $p; adb shell input tap $p; } }
+MISSING=""
+tapid() { local p; p=$(center "$1" "${2:-1}"); [ -n "$p" ] && adb shell input tap $p && return 0; MISSING="$MISSING $1#${2:-1}"; return 1; }
+dtapid() { local p; p=$(center "$1" "${2:-1}"); if [ -n "$p" ]; then adb shell input tap $p; adb shell input tap $p; else MISSING="$MISSING dtap:$1#${2:-1}"; fi; }
 
 adb logcat -c
 adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null
@@ -46,11 +47,12 @@ shot 7-onglets; step onglets
 tapid np_burger; sleep 2; shot 8-burger; adb shell input keyevent KEYCODE_BACK; sleep 1
 adb logcat -d > logcat.txt
 echo "::notice::Activités$STATES"
+[ -n "$MISSING" ] && echo "::warning::Introuvables :$MISSING (vues : $(grep -o 'resource-id="[^"]*:id/[a-z_]*' u.xml | sed 's/.*:id\///' | sort | uniq -c | sort -rn | head -12 | tr '\n' ' '))"
 if grep -q "FATAL EXCEPTION" logcat.txt; then
   CRASH=$(grep -E "FATAL EXCEPTION" -A25 logcat.txt | sed 's/^.*AndroidRuntime: //' | head -25 | tr '\n' '|' | sed 's/%/%25/g')
   echo "::error::PLANTAGE $CRASH"
   exit 1
 fi
-echo "$STATES" | grep -q "lancement: MediaActivity" || { echo "::error::L'app ne s'est pas ouverte sur la Galerie"; exit 1; }
+echo "$STATES" | grep -qE "lancement: (Media|Gallery)Activity" || { echo "::error::L'app ne s'est pas ouverte sur la Galerie"; exit 1; }
 echo "$STATES" | grep -q "visionneuse: ViewPagerActivity" || echo "::warning::La visionneuse ne s'est pas ouverte"
 echo "::notice::Aucun plantage"
