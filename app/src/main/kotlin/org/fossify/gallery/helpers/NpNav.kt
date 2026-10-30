@@ -191,7 +191,6 @@ object NpNav {
             toggle.animate().alpha(1f).scaleX(1f).scaleY(1f).translationX(0f).translationY(0f)
                 .setDuration(420).setStartDelay(40)
                 .setInterpolator(android.view.animation.OvershootInterpolator(2.2f))
-                .withEndAction(null)
                 .start()
         } else {
             toggle.tag = "hiding"
