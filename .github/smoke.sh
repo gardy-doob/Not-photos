@@ -36,8 +36,17 @@ dtapid() { local p; p=$(center "$1" "${2:-1}"); if [ -n "$p" ]; then adb shell i
 adb logcat -c
 adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null
 sleep 20; shot 1-galerie; step lancement
-adb shell uiautomator dump /sdcard/u.xml >/dev/null 2>&1; adb pull /sdcard/u.xml u0.xml >/dev/null 2>&1
-grep -q "aerr_" u0.xml && echo "::warning::Boîte « ne répond pas » au lancement : $(grep -o 'text="[^"]*"' u0.xml | head -4 | tr '\n' ' ')"
+# boîte « ne répond pas » : laquelle, puis on la ferme (« Attendre ») avant de tester
+for k in 1 2 3; do
+  adb shell uiautomator dump /sdcard/u.xml >/dev/null 2>&1; adb pull /sdcard/u.xml u0.xml >/dev/null 2>&1
+  grep -q "aerr_" u0.xml || break
+  WHO=$(adb shell dumpsys window | grep -m2 -E "Application Not Responding|mCurrentFocus" | tr -d '\r' | tr '\n' ' ')
+  echo "::warning::Boîte « ne répond pas » ($k) : $WHO"
+  p=$(python3 -c "import re;x=open('u0.xml').read();m=re.search(r'aerr_wait\"[^>]*bounds=\"\[(\d+),(\d+)\]\[(\d+),(\d+)\]',x);print((int(m[1])+int(m[3]))//2,(int(m[2])+int(m[4]))//2) if m else print('')")
+  [ -n "$p" ] && adb shell input tap $p
+  sleep 4
+done
+step apres-dialogue
 dtapid medium_thumbnail 4; sleep 3; shot 2-souvenir; step souvenir
 tapid medium_thumbnail 8; sleep 5; shot 4-visionneuse; step visionneuse
 adb shell input swipe 540 1500 540 500 180; sleep 3; shot 5-infos; step infos
