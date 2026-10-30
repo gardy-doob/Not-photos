@@ -11,9 +11,9 @@ import java.util.Calendar
 import java.util.Locale
 
 /**
- * Souvenirs Aura : un souvenir va d'une photo de début à une photo de fin (incluses), y compris
- * sur plusieurs jours. Toutes les photos prises entre les deux en font partie. Les souvenirs ne
- * se chevauchent pas. Les photos hors souvenir restent « libres ».
+ * Souvenirs Aurora : un souvenir commence à une photo (double tap) et regroupe toutes les photos
+ * prises ensuite, y compris les jours suivants, jusqu'au souvenir suivant. Aucune photo ne reste
+ * seule : celles d'avant le tout premier souvenir sont rangées dans « À classer ».
  * Les souvenirs sont stockés localement (préférences) sous forme de liste JSON.
  */
 object NpJalons {
@@ -24,6 +24,9 @@ object NpJalons {
     private const val KEY = "souvenirs"
 
     data class Cut(val path: String, val endPath: String, var name: String, val taken: Long, val endTaken: Long)
+
+    /** Groupe des photos plus anciennes que le premier souvenir. */
+    const val ORPHAN = "__a_classer__"
 
     /** Ce qu'affiche un en-tête de souvenir. */
     data class Info(val cutPath: String, val name: String, val range: String, val count: Int, val focused: Boolean)
@@ -55,7 +58,7 @@ object NpJalons {
             val array = JSONArray(raw)
             for (i in 0 until array.length()) {
                 val o = array.getJSONObject(i)
-                list.add(Cut(o.getString("path"), o.getString("end"), o.optString("name", ""), o.getLong("taken"), o.getLong("endTaken")))
+                list.add(Cut(o.getString("path"), o.optString("end", ""), o.optString("name", ""), o.getLong("taken"), o.optLong("endTaken", Long.MAX_VALUE)))
             }
         } catch (ignored: Exception) {
         }
@@ -80,7 +83,16 @@ object NpJalons {
 
     fun cutOf(context: Context, medium: Medium): Cut? {
         val t = timeOf(medium)
-        return all(context).firstOrNull { t >= it.taken && t <= it.endTaken }
+        return all(context).filter { it.taken <= t }.maxByOrNull { it.taken }
+    }
+
+    /** Double tap : un nouveau souvenir commence à cette photo. */
+    fun addStart(context: Context, medium: Medium): Boolean {
+        if (all(context).any { it.path == medium.path }) return false
+        all(context).add(Cut(medium.path, "", "", timeOf(medium), Long.MAX_VALUE))
+        all(context).sortBy { it.taken }
+        save(context)
+        return true
     }
 
     enum class AddResult { OK, OVERLAP, SAME }
@@ -124,13 +136,74 @@ object NpJalons {
 
     /** Pour chaque photo, le souvenir auquel elle appartient. */
     fun groupsOf(context: Context, media: List<Medium>): Map<String, Cut> {
-        val cuts = all(context)
+        val cuts = all(context).sortedBy { it.taken }
         if (cuts.isEmpty()) return emptyMap()
-        val result = HashMap<String, Cut>()
+        val times = LongArray(cuts.size) { cuts[it].taken }
+        val result = HashMap<String, Cut>(media.size)
         media.forEach { m ->
             val t = timeOf(m)
-            cuts.firstOrNull { t >= it.taken && t <= it.endTaken }?.let { result[m.path] = it }
+            var lo = 0
+            var hi = times.size - 1
+            var found = -1
+            while (lo <= hi) {
+                val mid = (lo + hi) ushr 1
+                if (times[mid] <= t) {
+                    found = mid
+                    lo = mid + 1
+                } else {
+                    hi = mid - 1
+                }
+            }
+            if (found >= 0) result[m.path] = cuts[found]
         }
+        return result
+    }
+
+    private val cardDateFormat = SimpleDateFormat("EEE d MMM yyyy", Locale.getDefault())
+
+    /**
+     * Mise en page « cartes » : chaque souvenir est une carte (avec sa date au-dessus) ;
+     * les photos d'avant le premier souvenir forment la carte « À classer ».
+     */
+    fun decorateCards(context: Context, items: List<ThumbnailItem>, focusCut: String?, orphanTitle: String): ArrayList<ThumbnailItem> {
+        val media = items.filterIsInstance<Medium>()
+        val groups = groupsOf(context, media)
+        val keyOf = { m: Medium -> groups[m.path]?.path ?: ORPHAN }
+        val visible = if (focusCut != null) media.filter { keyOf(it) == focusCut } else media
+
+        val members = LinkedHashMap<String, MutableList<Medium>>()
+        visible.forEach { members.getOrPut(keyOf(it)) { ArrayList() }.add(it) }
+
+        val result = ArrayList<ThumbnailItem>(visible.size + members.size * 2)
+        val ranges = ArrayList<IntRange>()
+        var dateIndex = 0
+        var current: String? = null
+        visible.forEach { m ->
+            val key = keyOf(m)
+            if (key != current) {
+                if (current != null) ranges.add(ranges.removeAt(ranges.lastIndex).first..(result.size - 1))
+                current = key
+                val list = members[key].orEmpty()
+                val times = list.map { timeOf(it) }
+                val newest = times.maxOrNull() ?: 0L
+                val oldest = times.minOrNull() ?: 0L
+                val dateLabel = if (sameDay(newest, oldest)) {
+                    cardDateFormat.format(newest)
+                } else {
+                    "${cardDateFormat.format(oldest)} \u2192 ${cardDateFormat.format(newest)}"
+                }
+                result.add(ThumbnailSection(dateLabel.replaceFirstChar { it.uppercase() } + "\u200B".repeat(dateIndex++)))
+                val cut = groups[m.path]
+                val name = if (cut == null) orphanTitle else cut.name
+                val title = PREFIX + key + SEP + list.size + SEP + rangeLabel(oldest, newest) + SEP + name + SEP + (if (focusCut != null) "1" else "0")
+                ranges.add(result.size..result.size)
+                result.add(ThumbnailSection(title))
+            }
+            result.add(m)
+        }
+        if (current != null) ranges.add(ranges.removeAt(ranges.lastIndex).first..(result.size - 1))
+        lastRanges = ranges
+        lastLayout = layoutOf(result, ranges)
         return result
     }
 

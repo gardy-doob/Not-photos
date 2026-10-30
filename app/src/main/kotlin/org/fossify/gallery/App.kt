@@ -14,6 +14,7 @@ class App : FossifyApp() {
     override fun onCreate() {
         super.onCreate()
         org.fossify.gallery.helpers.NpCrash.install(this)
+        org.fossify.gallery.helpers.NpDiag.mark("démarrage de l'app")
         Reprint.initialize(this)
         Picasso.setSingletonInstance(Picasso.Builder(this).downloader(object : Downloader {
             override fun load(request: Request) = Response.Builder().build()

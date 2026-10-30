@@ -94,6 +94,11 @@
             android:parentActivityName=".activities.MainActivity" />
 
         <activity
+            android:name=".activities.GalleryActivity"
+            android:configChanges="orientation"
+            android:exported="false" />
+
+        <activity
             android:name=".activities.ViewPagerActivity"
             android:configChanges="orientation|keyboardHidden|screenSize"
             android:exported="true"

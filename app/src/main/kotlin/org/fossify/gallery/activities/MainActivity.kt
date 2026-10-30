@@ -251,9 +251,12 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
             intArrayOf(androidx.core.graphics.ColorUtils.setAlphaComponent(getProperBackgroundColor(), 0xE6), 0)
         )
         org.fossify.gallery.helpers.NpCrash.showIfAny(this)
+        org.fossify.gallery.helpers.NpDiag.watch(this)
+        binding.npTopButtons.npVideoFilter.beGone()
+        binding.npTopButtons.npLogoText.setText(R.string.np_folders)
         binding.npTopButtons.npBurger.setOnClickListener {
             refreshMenuItems()
-            NpBurger.show(this, it, binding.mainMenu.requireToolbar().menu)
+            NpBurger.show(this, it, binding.mainMenu.requireToolbar().menu, listOf(NpBurger.Extra(getString(R.string.np_diag)) { org.fossify.gallery.helpers.NpDiag.share(this) }))
         }
 
         npFoldersMode = intent.getStringExtra(NP_TAB) == NP_TAB_FOLDERS

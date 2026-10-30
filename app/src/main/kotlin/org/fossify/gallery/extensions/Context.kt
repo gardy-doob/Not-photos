@@ -922,12 +922,19 @@ fun Context.getCachedMedia(
     path: String,
     getVideosOnly: Boolean = false,
     getImagesOnly: Boolean = false,
+    onlyFolders: List<String>? = null,
     callback: (ArrayList<ThumbnailItem>) -> Unit
 ) {
     ensureBackgroundThread {
         val mediaFetcher = MediaFetcher(this)
         val foldersToScan = if (path.isEmpty()) {
-            mediaFetcher.getFoldersToScan()
+            // Aura : pour la Galerie, inutile de lister tous les dossiers du téléphone
+            if (onlyFolders != null) {
+                val db = try { mediaDB.getParentPaths() } catch (e: Exception) { emptyList<String>() }
+                ArrayList(db.filter { f -> onlyFolders.any { f.equals(it, true) || f.startsWith("$it/", true) } })
+            } else {
+                mediaFetcher.getFoldersToScan()
+            }
         } else {
             arrayListOf(path)
         }

@@ -41,6 +41,7 @@ class JalonsActivity : SimpleActivity() {
             padBottomSystem = listOf(binding.jalonsList),
             moveBottomSystem = listOf(binding.npNav.root)
         )
+        org.fossify.gallery.helpers.NpDiag.watch(this)
         NpNav.setup(this, NP_TAB_JALONS, onReselect = { binding.jalonsList.smoothScrollToPosition(0) })
         binding.jalonsList.layoutManager = GridLayoutManager(this, 2)
         binding.jalonsList.adapter = JalonsAdapter()
@@ -66,7 +67,7 @@ class JalonsActivity : SimpleActivity() {
     private fun openInGallery(cut: NpJalons.Cut) {
         val intent = NpNav.intentFor(this, NP_TAB_GALLERY).apply {
             putExtra(NP_SCROLL_TO, cut.path)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
         }
         startActivity(intent)
         @Suppress("DEPRECATION")

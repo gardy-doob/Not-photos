@@ -331,9 +331,6 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
                 )
             }
 
-            binding.mediumViewerToolbar.menu.findItem(R.id.np_menu_jalon)?.setTitle(
-                if (NpJalons.pendingStart != null && NpJalons.pendingStart?.path != currentMedium.path) R.string.np_jalon_end_here else R.string.np_jalon_here
-            )
             updateMenuItemColors(binding.mediumViewerToolbar.menu, baseColor = Color.WHITE)
         }
     }
@@ -345,6 +342,7 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
             overflowIcon = resources.getColoredDrawableWithColor(R.drawable.ic_np_menu, npDark)
             navigationIcon = resources.getColoredDrawableWithColor(org.fossify.commons.R.drawable.ic_arrow_left_vector, npDark)
             menu.add(android.view.Menu.NONE, R.id.np_menu_jalon, 0, R.string.np_jalon_here)
+            menu.add(android.view.Menu.NONE, R.id.np_menu_diag, 900, R.string.np_diag)
             for (i in 0 until menu.size()) {
                 val item = menu.getItem(i)
                 item.setShowAsAction(
@@ -353,6 +351,7 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
             }
         }
         binding.topShadow.beGone()
+        org.fossify.gallery.helpers.NpDiag.watch(this)
 
         updateMenuItemColors(binding.mediumViewerToolbar.menu, baseColor = Color.WHITE)
         binding.mediumViewerToolbar.setOnMenuItemClickListener { menuItem ->
@@ -391,6 +390,7 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
                 R.id.menu_settings -> launchSettings()
                 R.id.menu_copy_to_clipboard -> copyImageToClipboard()
                 R.id.np_menu_jalon -> npCutHere()
+                R.id.np_menu_diag -> org.fossify.gallery.helpers.NpDiag.share(this)
                 else -> return@setOnMenuItemClickListener false
             }
             return@setOnMenuItemClickListener true
@@ -1038,29 +1038,14 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
 
     private fun npCutHere() {
         val medium = getCurrentMedium() ?: return
-        val start = NpJalons.pendingStart
-        if (start == null || start.path == medium.path) {
-            if (NpJalons.cutOf(this, medium) != null) {
-                toast(R.string.np_souvenir_inside)
-                return
-            }
-            NpJalons.pendingStart = medium
+        if (NpJalons.addStart(this, medium)) {
             binding.viewPager.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-            toast(getString(R.string.np_jalon_created, NpJalons.timeLabel(NpJalons.timeOf(medium))))
+            toast(R.string.np_souvenir_created)
+            val media = getCurrentMedia()
+            npStrip?.setMedia(media.map { it.path }, npGapsBefore(media))
         } else {
-            when (NpJalons.add(this, start, medium)) {
-                NpJalons.AddResult.OVERLAP -> toast(R.string.np_souvenir_overlap)
-                NpJalons.AddResult.SAME -> NpJalons.pendingStart = null
-                NpJalons.AddResult.OK -> {
-                    NpJalons.pendingStart = null
-                    binding.viewPager.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-                    toast(R.string.np_souvenir_created)
-                    val media = getCurrentMedia()
-                    npStrip?.setMedia(media.map { it.path }, npGapsBefore(media))
-                }
-            }
+            toast(R.string.np_souvenir_exists)
         }
-        refreshMenuItems()
     }
 
     private fun initBottomActionButtons() {

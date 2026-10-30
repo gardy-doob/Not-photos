@@ -99,6 +99,7 @@ import org.fossify.gallery.helpers.NP_TAB_FOLDERS
 import org.fossify.gallery.helpers.NP_TAB_GALLERY
 import org.fossify.gallery.helpers.NP_TAB_VIDEOS
 import org.fossify.gallery.helpers.NpNav
+import org.fossify.gallery.helpers.NpDiag
 import org.fossify.gallery.helpers.NpBurger
 import org.fossify.gallery.helpers.NpSettings
 import org.fossify.gallery.helpers.NpJalonDecoration
@@ -132,7 +133,7 @@ import org.fossify.gallery.models.ThumbnailSection
 import java.io.File
 import java.io.IOException
 
-class MediaActivity : SimpleActivity(), MediaOperationsListener {
+open class MediaActivity : SimpleActivity(), MediaOperationsListener {
     override var isSearchBarEnabled = true
     
     private val LAST_MEDIA_CHECK_PERIOD = 3000L
@@ -218,6 +219,8 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
             intArrayOf(androidx.core.graphics.ColorUtils.setAlphaComponent(getProperBackgroundColor(), 0xE6), 0)
         )
         binding.npTopButtons.npBurger.setOnClickListener { npShowBurger(it) }
+        binding.npTopButtons.npVideoFilter.setOnClickListener { npToggleVideoFilter() }
+        NpDiag.watch(this)
 
         if (mIsGetImageIntent || mIsGetVideoIntent || mIsGetAnyIntent) {
             NpNav.hide(this)
@@ -582,6 +585,27 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
 
     // ---------- Aura ----------
 
+    /** Retour sur la Galerie (déjà ouverte) depuis un autre onglet : rien à recharger. */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val tab = intent.getStringExtra(NP_TAB) ?: return
+        intent.getStringExtra(NP_SCROLL_TO)?.let {
+            npScrollTo = it
+            npFocusCut = null
+        }
+        if (tab != npTab && !npSwitchInPlace(tab)) return
+        npSetupNav()
+        if (npScrollTo != null) {
+            npRefreshJalons()
+            binding.mediaGrid.post { npScrollToTarget() }
+        } else if (intent.getBooleanExtra(NP_CASCADE, false)) {
+            npCascadePending = true
+            npCascade()
+        }
+        NpDiag.mark("retour onglet $tab")
+    }
+
     fun npJalonsActive() = npTab != NP_TAB_VIDEOS && !(mIsGetImageIntent || mIsGetVideoIntent || mIsGetAnyIntent)
 
     private fun npShowJalons() = npJalonsActive() && NpSettings.showJalons(this)
@@ -606,7 +630,44 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
 
     fun npGridColumns() = if (npSouvenirLayout()) 6 else config.mediaColumnCnt
 
+    /** En-tête : logo Aurora, filtre vidéo (icône photo + vidéo quand il est actif), menu. */
+    private fun npPaintHeader() {
+        val header = binding.npTopButtons
+        val gallery = npForceShowAll && org.fossify.gallery.helpers.NpGallery.isGalleryTab(npTab)
+        header.npVideoFilter.beVisibleIf(gallery)
+        val videosOnly = npTab == NP_TAB_VIDEOS || (npTab == NP_TAB_ALL && npOnlyVideos)
+        header.npVideoFilter.setImageResource(if (videosOnly) R.drawable.ic_np_photo_video else R.drawable.ic_np_videos)
+        header.npVideoFilter.contentDescription = getString(if (videosOnly) R.string.np_photos_videos else R.string.np_videos_only)
+        header.npLogoText.setTextColor(if (npSouvenirLayout()) Color.WHITE else 0xFF3A3330.toInt())
+        if (!gallery) {
+            header.npLogoText.text = binding.mediaMenu.requireToolbar().title?.takeIf { it.isNotEmpty() } ?: mPath.substringAfterLast('/')
+        } else {
+            header.npLogoText.setText(R.string.np_brand)
+        }
+    }
+
+    private fun npToggleVideoFilter() {
+        binding.mediaGrid.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+        when (npTab) {
+            NP_TAB_GALLERY -> npSwitchInPlace(NP_TAB_VIDEOS)
+            NP_TAB_VIDEOS -> npSwitchInPlace(NP_TAB_GALLERY)
+            NP_TAB_ALL -> {
+                npOnlyVideos = !npOnlyVideos
+                npPaintHeader()
+                npRefreshJalons()
+                binding.mediaGrid.scrollToPosition(0)
+            }
+        }
+        val v = binding.npTopButtons.npVideoFilter
+        v.animate().rotationY(90f).setDuration(110).withEndAction {
+            npPaintHeader()
+            v.rotationY = -90f
+            v.animate().rotationY(0f).setDuration(140).start()
+        }.start()
+    }
+
     private fun npSetupNav() {
+        npPaintHeader()
         NpNav.setup(
             activity = this,
             current = npTab,
@@ -624,6 +685,7 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
     private fun npSwitchInPlace(tab: String): Boolean {
         if (!npForceShowAll || !org.fossify.gallery.helpers.NpGallery.isGalleryTab(npTab) || !org.fossify.gallery.helpers.NpGallery.isGalleryTab(tab)) return false
         val wasSouvenir = npSouvenirLayout()
+        val needsReload = (npTab == NP_TAB_ALL) != (tab == NP_TAB_ALL)
         npTab = tab
         npOnlyVideos = tab == NP_TAB_VIDEOS
         npFocusCut = null
@@ -631,7 +693,14 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
         if (wasSouvenir != npSouvenirLayout()) setupLayoutManager()
         npSetupNav()
         npApplyGridStyle()
-        npRefreshJalons()
+        if (needsReload) {
+            npCascadePending = true
+            mLoadedInitialPhotos = false
+            mIsGettingMedia = false
+            getMedia()
+        } else {
+            npRefreshJalons()
+        }
         binding.mediaGrid.scrollToPosition(0)
         return true
     }
@@ -682,6 +751,7 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
         androidx.core.view.WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars =
             androidx.core.graphics.ColorUtils.calculateLuminance(bg) > 0.5
         getMediaAdapter()?.updateTextColor(if (souvenir) Color.WHITE else getProperTextColor())
+        npPaintHeader()
 
         // l'espacement de Fossify suppose une seule taille de case : on le retire en mode Souvenirs
         if (souvenir) {
@@ -703,35 +773,30 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
         } else if (npOnlyVideos) {
             items = NpJalons.dropEmptySections(items.filter { it !is Medium || it.isVideo() })
         }
-        return if (npShowJalons()) {
+        return if (npSouvenirLayout()) {
+            NpJalons.decorateCards(this, items, npFocusCut, getString(R.string.np_unsorted))
+        } else if (npShowJalons()) {
             NpJalons.decorate(this, items, npFocusCut)
         } else {
             NpJalons.plain(items)
         }
     }
 
-    /** Double tap : choisir le début d'un souvenir, puis toucher la photo de fin. */
+    /** Double tap : un nouveau souvenir commence à cette photo ; les suivantes le rejoignent. */
     fun npCutAt(medium: Medium) {
         if (!npJalonsActive()) return
-        val pending = npPendingStart
-        if (pending == null) {
-            if (NpJalons.cutOf(this, medium) != null) {
-                toast(R.string.np_souvenir_inside)
-                return
-            }
-            npPendingStart = medium
-            binding.mediaGrid.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-            if (!NpSettings.showJalons(this)) {
-                NpSettings.setShowJalons(this, true)
-                npSetupNav()
-                npApplyGridStyle()
-                npRefreshJalons()
-            }
-            npShowPendingBar()
-            getMediaAdapter()?.notifyDataSetChanged()
-        } else {
-            npFinishSouvenir(medium)
+        if (!NpJalons.addStart(this, medium)) {
+            toast(R.string.np_souvenir_exists)
+            return
         }
+        binding.mediaGrid.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+        NpDiag.mark("nouveau souvenir")
+        if (!NpSettings.showJalons(this)) {
+            NpSettings.setShowJalons(this, true)
+            npSetupNav()
+            npApplyGridStyle()
+        }
+        npRefreshJalons()
     }
 
     /** Toucher une photo pendant qu'un début est choisi : c'est la fin du souvenir. */
@@ -811,6 +876,7 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
     private fun npShowBurger(anchor: View) {
         val style = NpSettings.style(this)
         val extras = arrayListOf(
+            NpBurger.Extra(getString(R.string.np_diag)) { NpDiag.share(this) },
             NpBurger.Extra(
                 getString(R.string.np_jalon_style) + " : " +
                     getString(if (style == NpSettings.STYLE_CARDS) R.string.np_jalon_style_cards else R.string.np_jalon_style_timeline)
@@ -1062,11 +1128,14 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
         if (mLoadedInitialPhotos) {
             startAsyncTask()
         } else {
+            NpDiag.mark("cache:start ${npTab}")
             getCachedMedia(
                 mPath,
                 mIsGetVideoIntent && !mIsGetImageIntent,
-                mIsGetImageIntent && !mIsGetVideoIntent
+                mIsGetImageIntent && !mIsGetVideoIntent,
+                npFoldersFilter()
             ) {
+                NpDiag.mark("cache:done ${it.size}")
                 if (it.isEmpty()) {
                     runOnUiThread {
                         binding.mediaRefreshLayout.isRefreshing = true
@@ -1081,15 +1150,22 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
         mLoadedInitialPhotos = true
     }
 
+    /** Dossiers à charger : ceux de la Galerie (appareil photo + dossiers ajoutés), ou tous pour « Toutes ». */
+    private fun npFoldersFilter(): List<String>? =
+        if (npForceShowAll && (npTab == NP_TAB_GALLERY || npTab == NP_TAB_VIDEOS)) org.fossify.gallery.helpers.NpGallery.folders(this) else null
+
     private fun startAsyncTask() {
+        NpDiag.mark("scan:start ${npTab}")
         mCurrAsyncTask?.stopFetching()
         mCurrAsyncTask = GetMediaAsynctask(
             context = applicationContext,
             mPath = mPath,
             isPickImage = mIsGetImageIntent && !mIsGetVideoIntent,
             isPickVideo = mIsGetVideoIntent && !mIsGetImageIntent,
-            showAll = mShowAll
+            showAll = mShowAll,
+            onlyFolders = npFoldersFilter()
         ) {
+            NpDiag.mark("scan:done ${it.size}")
             ensureBackgroundThread {
                 val oldMedia = mMedia.clone() as ArrayList<ThumbnailItem>
                 val newMedia = it

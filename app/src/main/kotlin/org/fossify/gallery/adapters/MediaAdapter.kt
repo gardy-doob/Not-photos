@@ -116,6 +116,7 @@ class MediaAdapter(
     private val ITEM_MEDIUM_VIDEO_PORTRAIT = 1
     private val ITEM_MEDIUM_PHOTO = 2
     private val ITEM_NP_JALON = 3
+    private val NP_KIND_PAYLOAD = "np_kind"
 
     private val config = activity.config
     private val viewType = config.getFolderViewType(if (config.showAll) SHOW_ALL else path)
@@ -188,6 +189,29 @@ class MediaAdapter(
             }
         }
         bindViewHolder(holder)
+    }
+
+    /** Picto vidéo connu après coup : on ne met à jour que les pictos, sans recharger les vignettes. */
+    private fun npKindsChanged() {
+        if (itemCount > 0) notifyItemRangeChanged(0, itemCount, NP_KIND_PAYLOAD)
+    }
+
+    override fun onBindViewHolder(holder: MyRecyclerViewAdapter.ViewHolder, position: Int, payloads: MutableList<Any>) {
+        if (payloads.isNotEmpty() && payloads.all { it == NP_KIND_PAYLOAD }) {
+            val medium = media.getOrNull(position) as? Medium ?: return
+            if (!medium.isVideo() || isListViewType) return
+            val kind = NpMediaKind.get(activity, medium.path) {}
+            holder.itemView.findViewById<ImageView>(R.id.play_portrait_outline)?.setImageResource(
+                when (kind) {
+                    NpMediaKind.CINEMATIC_VIDEO -> R.drawable.ic_np_cinematic
+                    NpMediaKind.CINEMATIC_PHOTO -> R.drawable.ic_np_sparkle
+                    else -> R.drawable.ic_np_play_circle
+                }
+            )
+            holder.itemView.findViewById<View>(R.id.video_duration)?.beVisibleIf(kind != NpMediaKind.CINEMATIC_PHOTO && config.showThumbnailVideoDuration)
+            return
+        }
+        super.onBindViewHolder(holder, position, payloads)
     }
 
     private var npLastTapPath: String? = null
@@ -739,7 +763,7 @@ class MediaAdapter(
             favorite.beVisibleIf(medium.isFavorite && config.markFavoriteItems)
 
             playPortraitOutline?.beVisibleIf(medium.isVideo() || medium.isPortrait())
-            val npKind = if (medium.isVideo()) NpMediaKind.get(activity, medium.path) { notifyDataSetChanged() } else -1
+            val npKind = if (medium.isVideo()) NpMediaKind.get(activity, medium.path) { npKindsChanged() } else -1
             if (medium.isVideo()) {
                 playPortraitOutline?.setImageResource(
                     if (isListViewType) {
@@ -869,8 +893,15 @@ class MediaAdapter(
             npJalonOpen.setImageResource(if (info.focused) R.drawable.ic_np_collapse else R.drawable.ic_np_expand)
             npJalonOpen.setColorFilter(ink)
             npJalonOpen.setOnClickListener { npActivity?.npToggleFocus(info.cutPath) }
+            val orphan = info.cutPath == NpJalons.ORPHAN
+            npJalonRemove.beVisibleIf(!orphan)
             npJalonRemove.setOnClickListener { npActivity?.npRemoveJalon(info.cutPath) }
-            npJalonTexts.setOnClickListener { npActivity?.npEditJalon(info.cutPath) }
+            npJalonTexts.setOnClickListener { if (!orphan) npActivity?.npEditJalon(info.cutPath) }
+            if (orphan) {
+                npJalonTitle.text = info.name
+                npJalonTitle.alpha = 0.55f
+                npJalonTitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
+            }
         }
     }
 

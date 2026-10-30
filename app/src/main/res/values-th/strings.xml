@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_launcher_name">Aura</string>
+    <string name="app_launcher_name">Aurora</string>
     <string name="edit">แก้ไข</string>
     <string name="open_camera">เปิดกล้อง</string>
     <string name="hidden">(ซ่อนอยู่)</string>

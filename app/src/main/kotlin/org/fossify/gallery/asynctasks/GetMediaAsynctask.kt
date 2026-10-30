@@ -14,7 +14,7 @@ import org.fossify.gallery.models.ThumbnailItem
 
 class GetMediaAsynctask(
     val context: Context, val mPath: String, val isPickImage: Boolean = false, val isPickVideo: Boolean = false,
-    val showAll: Boolean, val callback: (media: ArrayList<ThumbnailItem>) -> Unit
+    val showAll: Boolean, val onlyFolders: List<String>? = null, val callback: (media: ArrayList<ThumbnailItem>) -> Unit
 ) :
     AsyncTask<Void, Void, ArrayList<ThumbnailItem>>() {
     private val mediaFetcher = MediaFetcher(context)
@@ -38,12 +38,22 @@ class GetMediaAsynctask(
         val dateTakens = if (getProperDateTaken) mediaFetcher.getDateTakens() else HashMap()
 
         val media = if (showAll) {
-            val foldersToScan = mediaFetcher.getFoldersToScan().filter { it != RECYCLE_BIN && it != FAVORITES && !context.config.isFolderProtected(it) }
+            var foldersToScan = mediaFetcher.getFoldersToScan().filter { it != RECYCLE_BIN && it != FAVORITES && !context.config.isFolderProtected(it) }
+            // Aura : la Galerie ne parcourt que ses dossiers (appareil photo + dossiers ajoutés)
+            onlyFolders?.let { allowed ->
+                foldersToScan = foldersToScan.filter { f -> allowed.any { f.equals(it, true) || f.startsWith("$it/", true) } }
+            }
+            // Aura : une seule requête MediaStore pour tous les dossiers (avant : une requête complète par dossier)
+            val android11Files = if (org.fossify.commons.helpers.isRPlus() && !org.fossify.commons.extensions.isExternalStorageManager()) {
+                mediaFetcher.getAndroid11FolderMedia(isPickImage, isPickVideo, favoritePaths, false, getProperDateTaken, dateTakens.clone() as HashMap<String, Long>)
+            } else {
+                null
+            }
             val media = ArrayList<Medium>()
             foldersToScan.forEach {
                 val newMedia = mediaFetcher.getFilesFrom(
                     it, isPickImage, isPickVideo, getProperDateTaken, getProperLastModified, getProperFileSize,
-                    favoritePaths, getVideoDurations, lastModifieds, dateTakens.clone() as HashMap<String, Long>, null
+                    favoritePaths, getVideoDurations, lastModifieds, dateTakens.clone() as HashMap<String, Long>, android11Files
                 )
                 media.addAll(newMedia)
             }

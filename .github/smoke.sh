@@ -35,14 +35,13 @@ dtapid() { local p; p=$(center "$1" "${2:-1}"); [ -n "$p" ] && { adb shell input
 adb logcat -c
 adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null
 sleep 20; shot 1-galerie; step lancement
-dtapid medium_thumbnail 2; sleep 2; shot 2-debut; step debut
-tapid medium_thumbnail 5; sleep 3; shot 3-souvenir; step souvenir
+dtapid medium_thumbnail 4; sleep 3; shot 2-souvenir; step souvenir
 tapid medium_thumbnail 8; sleep 5; shot 4-visionneuse; step visionneuse
 adb shell input swipe 540 1500 540 500 180; sleep 3; shot 5-infos; step infos
 adb shell input keyevent KEYCODE_BACK; sleep 2; step apres-infos
 adb shell input tap 540 1100; sleep 2; shot 6-plein-ecran
 adb shell input keyevent KEYCODE_BACK; sleep 3; step retour-galerie
-for t in np_nav_videos np_nav_gallery np_nav_jalons np_nav_all np_nav_folders np_nav_gallery np_nav_toggle np_nav_toggle; do tapid $t; sleep 4; done
+for t in np_video_filter np_video_filter np_nav_jalons np_nav_gallery np_nav_all np_nav_folders np_nav_gallery np_nav_toggle np_nav_toggle; do tapid $t; sleep 4; done
 shot 7-onglets; step onglets
 tapid np_burger; sleep 2; shot 8-burger; adb shell input keyevent KEYCODE_BACK; sleep 1
 adb logcat -d > logcat.txt

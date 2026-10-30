@@ -6,7 +6,7 @@
     <string name="np_all">Toutes</string>
     <string name="np_folders">Dossiers</string>
     <string name="np_coming_soon">Bientôt disponible</string>
-    <string name="np_jalons_empty">Aucun souvenir pour l\'instant. Dans la Galerie, double tap sur la première photo, puis touche la dernière.</string>
+    <string name="np_jalons_empty">Aucun souvenir pour l\'instant. Dans la Galerie, double tap sur une photo : un souvenir commence là, et les photos suivantes le rejoignent.</string>
     <string name="np_share">Partager</string>
     <string name="np_edit">Modifier</string>
     <string name="np_jalon">Souvenir</string>
@@ -36,9 +36,15 @@
     <string name="np_souvenir_pending">Début : %s · touche la photo de fin</string>
     <string name="np_souvenir_overlap">Cette plage recoupe un souvenir existant. Choisis une autre fin.</string>
     <string name="np_souvenir_inside">Cette photo fait déjà partie d\'un souvenir</string>
-    <string name="np_souvenir_created">Souvenir créé</string>
+    <string name="np_souvenir_created">Nouveau souvenir à partir de cette photo</string>
     <string name="np_info_details">Détails</string>
     <string name="np_info_on_device">Sur l\'appareil</string>
     <string name="np_info_open_maps">Ouvrir dans Maps</string>
     <string name="np_info_no_place">Aucun lieu enregistré</string>
+    <string name="np_brand">Aurora</string>
+    <string name="np_diag">Envoyer un diagnostic</string>
+    <string name="np_videos_only">Vidéos uniquement</string>
+    <string name="np_photos_videos">Photos et vidéos</string>
+    <string name="np_unsorted">À classer</string>
+    <string name="np_souvenir_exists">Un souvenir commence déjà à cette photo</string>
 </resources>

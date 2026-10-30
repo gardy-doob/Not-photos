@@ -303,6 +303,10 @@ class MediaFetcher(val context: Context) {
         val showHidden = config.shouldShowHidden
         val showPortraits = filterMedia and TYPE_PORTRAITS != 0
         val fileSizes = if (checkProperFileSize || checkFileExistence) getFolderSizes(folder) else HashMap()
+        // Aura : réutiliser la durée des vidéos déjà connues au lieu d'ouvrir chaque fichier
+        val npKnownDurations = if (getVideoDurations) {
+            try { context.mediaDB.getMediaFromPath(folder).filter { it.videoDuration > 0 }.associate { it.path to it.videoDuration } } catch (e: Exception) { emptyMap() }
+        } else emptyMap()
 
         val files = when (folder) {
             FAVORITES -> favoritePaths.filter { showHidden || !it.contains("/.") }.map { File(it) }.toMutableList() as ArrayList<File>
@@ -393,7 +397,7 @@ class MediaFetcher(val context: Context) {
                 lastModified = newLastModified
 
                 var dateTaken = lastModified
-                val videoDuration = if (getVideoDurations && isVideo) context.getDuration(path) ?: 0 else 0
+                val videoDuration = if (getVideoDurations && isVideo) npKnownDurations[path] ?: context.getDuration(path) ?: 0 else 0
 
                 if (getProperDateTaken) {
                     var newDateTaken = dateTakens.remove(path)

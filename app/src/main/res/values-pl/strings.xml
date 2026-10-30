@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_launcher_name">Aura</string>
+    <string name="app_launcher_name">Aurora</string>
     <string name="edit">Edytuj</string>
     <string name="open_camera">Otwórz aparat</string>
     <string name="hidden">(ukryte)</string>

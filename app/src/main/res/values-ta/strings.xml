@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_launcher_name">Aura</string>
+    <string name="app_launcher_name">Aurora</string>
     <string name="edit">திருத்து</string>
     <string name="open_camera">படக்கருவியைத் திற</string>
     <string name="hidden">(மறைந்த)</string>

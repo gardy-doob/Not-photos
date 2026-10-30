@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_launcher_name">Aura</string>
+    <string name="app_launcher_name">Aurora</string>
     <string name="edit">ویرایش</string>
     <string name="open_camera">باز کردن دوربین</string>
     <string name="hidden">(پنهان)</string>

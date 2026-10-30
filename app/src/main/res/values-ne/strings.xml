@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_launcher_name">Aura</string>
+    <string name="app_launcher_name">Aurora</string>
     <string name="edit">सम्पादन</string>
     <string name="open_camera">क्यामेरा खोल्नुहोस</string>
     <string name="hidden">(लुकेको)</string>
