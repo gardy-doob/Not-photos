@@ -19,6 +19,8 @@ import org.fossify.gallery.R
  * Bande de miniatures façon iOS : on la fait défiler au doigt, la miniature du centre
  * devient la photo affichée en grand. Un espace marque le début de chaque jalon.
  */
+private const val SELECTION = "selection"
+
 class NpFilmstrip(
     private val recyclerView: RecyclerView,
     private val onCenterChanged: (position: Int) -> Unit
@@ -30,7 +32,20 @@ class NpFilmstrip(
     private val gapWidth = (10 * density).toInt()
 
     private val layoutManager = LinearLayoutManager(recyclerView.context, LinearLayoutManager.HORIZONTAL, false)
-    private val snapHelper = LinearSnapHelper()
+    // iOS : le geste garde son élan (vitesse amplifiée), puis se cale sur la miniature la plus proche
+    private val snapHelper = object : LinearSnapHelper() {
+        override fun findTargetSnapPosition(lm: RecyclerView.LayoutManager, velocityX: Int, velocityY: Int): Int =
+            super.findTargetSnapPosition(lm, (velocityX * 1.35f).toInt(), velocityY)
+    }
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var pendingCenter = -1
+    private val applyCenter = Runnable {
+        val p = pendingCenter
+        if (p >= 0) {
+            pendingCenter = -1
+            onCenterChanged(p)
+        }
+    }
     private val adapter = StripAdapter()
 
     private var paths: List<String> = emptyList()
@@ -42,6 +57,8 @@ class NpFilmstrip(
         recyclerView.layoutManager = layoutManager
         recyclerView.adapter = adapter
         recyclerView.itemAnimator = null
+        recyclerView.setItemViewCacheSize(30)
+        recyclerView.setHasFixedSize(true)
         snapHelper.attachToRecyclerView(recyclerView)
         recyclerView.addOnLayoutChangeListener { v, left, _, right, _, oldLeft, _, oldRight, _ ->
             if (right - left != oldRight - oldLeft) {
@@ -55,7 +72,12 @@ class NpFilmstrip(
             override fun onScrollStateChanged(rv: RecyclerView, newState: Int) {
                 when (newState) {
                     RecyclerView.SCROLL_STATE_DRAGGING -> userScrolling = true
-                    RecyclerView.SCROLL_STATE_IDLE -> userScrolling = false
+                    RecyclerView.SCROLL_STATE_IDLE -> {
+                        userScrolling = false
+                        // arrêt du geste : la grande photo rattrape tout de suite la miniature centrale
+                        handler.removeCallbacks(applyCenter)
+                        applyCenter.run()
+                    }
                 }
             }
 
@@ -65,10 +87,17 @@ class NpFilmstrip(
                 if (center != RecyclerView.NO_POSITION && center != current) {
                     val previous = current
                     current = center
-                    if (previous >= 0) adapter.notifyItemChanged(previous)
-                    adapter.notifyItemChanged(center)
-                    rv.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                    onCenterChanged(center)
+                    // seulement le cadre de sélection : pas de rechargement des miniatures
+                    if (previous >= 0) adapter.notifyItemChanged(previous, SELECTION)
+                    adapter.notifyItemChanged(center, SELECTION)
+                    if (rv.scrollState == RecyclerView.SCROLL_STATE_DRAGGING) {
+                        rv.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                    }
+                    // geste rapide : on ne recharge la grande photo qu'une fois le mouvement ralenti
+                    pendingCenter = center
+                    handler.removeCallbacks(applyCenter)
+                    val fast = kotlin.math.abs(dx) > 14 * density
+                    if (fast) handler.postDelayed(applyCenter, 90) else applyCenter.run()
                 }
             }
         })
@@ -87,8 +116,8 @@ class NpFilmstrip(
         if (position < 0 || position >= paths.size) return
         val previous = current
         current = position
-        if (previous >= 0 && previous < paths.size) adapter.notifyItemChanged(previous)
-        adapter.notifyItemChanged(position)
+        if (previous >= 0 && previous < paths.size) adapter.notifyItemChanged(previous, SELECTION)
+        adapter.notifyItemChanged(position, SELECTION)
         if (!userScrolling) recyclerView.post { scrollToCenter(position) }
     }
 
@@ -149,16 +178,7 @@ class NpFilmstrip(
                 rightMargin = itemSpacing
             }
 
-            val isCurrent = position == current
-            holder.image.alpha = if (isCurrent) 1f else 0.6f
-            holder.image.foreground = if (isCurrent) {
-                ContextCompat.getDrawable(holder.itemView.context, R.drawable.np_strip_current_fg)
-            } else {
-                null
-            }
-            val inset = if (isCurrent) (2 * density).toInt() else 0
-            holder.image.setPadding(inset, inset, inset, inset)
-            holder.image.cropToPadding = true
+            styleSelection(holder, position)
 
             holder.itemView.setOnClickListener {
                 val pos = holder.bindingAdapterPosition
@@ -170,10 +190,32 @@ class NpFilmstrip(
 
             Glide.with(holder.image)
                 .load(paths[position])
+                .dontAnimate()
                 .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
                 .override(itemWidth * 2, itemHeight * 2)
                 .centerCrop()
                 .into(holder.image)
+        }
+
+        override fun onBindViewHolder(holder: StripHolder, position: Int, payloads: MutableList<Any>) {
+            if (payloads.isNotEmpty() && payloads.all { it == SELECTION }) {
+                styleSelection(holder, position)
+            } else {
+                onBindViewHolder(holder, position)
+            }
+        }
+
+        private fun styleSelection(holder: StripHolder, position: Int) {
+            val isCurrent = position == current
+            holder.image.alpha = if (isCurrent) 1f else 0.6f
+            holder.image.foreground = if (isCurrent) {
+                ContextCompat.getDrawable(holder.itemView.context, R.drawable.np_strip_current_fg)
+            } else {
+                null
+            }
+            val inset = if (isCurrent) (2 * density).toInt() else 0
+            holder.image.setPadding(inset, inset, inset, inset)
+            holder.image.cropToPadding = true
         }
 
         override fun getItemCount() = paths.size

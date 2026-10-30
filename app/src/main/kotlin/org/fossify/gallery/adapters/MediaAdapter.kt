@@ -864,7 +864,7 @@ class MediaAdapter(
         val souvenir = (activity as? MediaActivity)?.npSouvenirLayout() == true
         ThumbnailSectionBinding.bind(view).apply {
             thumbnailSection.text = section.title
-            thumbnailSection.setTextColor(textColor)
+            thumbnailSection.setTextColor(if (souvenir) android.graphics.Color.WHITE else textColor)
             thumbnailSection.gravity = if (souvenir) android.view.Gravity.CENTER_HORIZONTAL else android.view.Gravity.START
             thumbnailSection.setTypeface(null, if (souvenir) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
             thumbnailSection.setTextSize(TypedValue.COMPLEX_UNIT_SP, if (souvenir) 14f else 15f)

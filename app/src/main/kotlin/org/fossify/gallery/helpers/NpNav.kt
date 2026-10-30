@@ -98,7 +98,6 @@ object NpNav {
         val nav = activity.findViewById<View>(R.id.np_nav) ?: return
         val column = nav.findViewById<android.widget.LinearLayout>(R.id.np_nav_column) ?: return
         val pill = nav.findViewById<android.widget.LinearLayout>(R.id.np_nav_pill) ?: return
-        val bridge = nav.findViewById<View>(R.id.np_nav_bridge)
         val label = nav.findViewById<View>(R.id.np_nav_label)
         val density = activity.resources.displayMetrics.density
         fun dp(v: Int) = (v * density).toInt()
@@ -134,81 +133,49 @@ object NpNav {
                 item.layoutParams = it
             }
         }
-        bridge?.let { b ->
-            (b.layoutParams as? android.widget.LinearLayout.LayoutParams)?.let {
-                if (horizontal) it.setMargins(dp(-7), 0, dp(-7), 0) else it.setMargins(0, dp(-7), 0, dp(-7))
-                b.layoutParams = it
-            }
-            // le col est dessiné vertical : on le tourne pour relier la bulle par la gauche
-            b.rotation = if (horizontal) -90f else 0f
-            b.outlineProvider = null
+        // marge autour de la barre : le flou de l'effet liquide ne doit pas être coupé au bord
+        (column.layoutParams as? android.widget.FrameLayout.LayoutParams)?.let {
+            it.marginEnd = dp(12)
+            if (horizontal) it.marginStart = dp(12)
+            column.layoutParams = it
         }
+        NpGoo.of(nav)?.setHorizontal(horizontal)
         (label?.layoutParams as? android.widget.FrameLayout.LayoutParams)?.let {
             it.gravity = if (horizontal) android.view.Gravity.TOP or android.view.Gravity.START else android.view.Gravity.TOP or android.view.Gravity.END
-            it.marginEnd = if (horizontal) 0 else dp(68)
+            it.marginEnd = if (horizontal) 0 else dp(80)
             label.layoutParams = it
         }
         (nav.layoutParams as? androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams)?.let {
             it.gravity = if (horizontal) android.view.Gravity.BOTTOM or android.view.Gravity.CENTER_HORIZONTAL else android.view.Gravity.BOTTOM or android.view.Gravity.END
-            it.marginEnd = if (horizontal) 0 else dp(12)
+            it.marginEnd = 0
             nav.layoutParams = it
         }
     }
 
-    /** Fait apparaître (ou rentrer) la bulle Souvenirs, comme une goutte qui sort de « Galerie ». */
-    fun showSouvenirBubble(activity: Activity, show: Boolean, animate: Boolean) {
-        val nav = activity.findViewById<View>(R.id.np_nav) ?: return
-        val toggle = nav.findViewById<View>(R.id.np_nav_toggle) ?: return
-        val bridge = nav.findViewById<View>(R.id.np_nav_bridge) ?: return
-        val horizontal = NpSettings.navHorizontal(activity)
-        val shown = toggle.visibility == View.VISIBLE && toggle.tag != "hiding"
-        if (show == shown && toggle.tag != "hiding") return
-        val distance = 44 * activity.resources.displayMetrics.density
-        toggle.animate().cancel()
-        bridge.animate().cancel()
-        // le col pousse depuis la barre : pivot du côté de « Galerie »
-        bridge.pivotX = bridge.width / 2f
-        bridge.pivotY = if (bridge.height > 0) bridge.height.toFloat() else 24 * activity.resources.displayMetrics.density
-        if (!animate) {
-            toggle.tag = null
-            toggle.visibility = if (show) View.VISIBLE else View.INVISIBLE
-            bridge.visibility = toggle.visibility
-            toggle.alpha = 1f; toggle.scaleX = 1f; toggle.scaleY = 1f; toggle.translationX = 0f; toggle.translationY = 0f
-            bridge.alpha = 1f; bridge.scaleY = 1f
-            return
-        }
-        if (show) {
-            toggle.tag = null
-            toggle.visibility = View.VISIBLE
-            bridge.visibility = View.VISIBLE
-            toggle.alpha = 0f
-            toggle.scaleX = 0.3f
-            toggle.scaleY = 0.3f
-            if (horizontal) toggle.translationX = distance else toggle.translationY = distance
-            bridge.scaleY = 0f
-            bridge.alpha = 1f
-            bridge.animate().scaleY(1f).setDuration(260).setInterpolator(android.view.animation.DecelerateInterpolator()).start()
-            toggle.animate().alpha(1f).scaleX(1f).scaleY(1f).translationX(0f).translationY(0f)
-                .setDuration(420).setStartDelay(40)
-                .setInterpolator(android.view.animation.OvershootInterpolator(2.2f))
-                .start()
-        } else {
-            toggle.tag = "hiding"
-            val anim = toggle.animate().alpha(0f).scaleX(0.3f).scaleY(0.3f)
-            if (horizontal) anim.translationX(distance) else anim.translationY(distance)
-            anim.setDuration(260).setStartDelay(0)
-                .setInterpolator(android.view.animation.AnticipateInterpolator(1.4f))
-                .withEndAction {
-                    toggle.visibility = View.INVISIBLE
-                    toggle.tag = null
-                    toggle.translationX = 0f
-                    toggle.translationY = 0f
-                }
-                .start()
-            bridge.animate().scaleY(0f).setDuration(220).setStartDelay(120)
-                .withEndAction { bridge.visibility = View.INVISIBLE }
-                .start()
-        }
+    /** Barre liquide de cet écran (créée une seule fois). */
+    private fun gooOf(activity: Activity): NpGoo? {
+        val nav = activity.findViewById<android.widget.FrameLayout>(R.id.np_nav) ?: return null
+        NpGoo.of(nav)?.let { return it }
+        val goo = NpGoo(
+            nav = nav,
+            column = nav.findViewById(R.id.np_nav_column),
+            pill = nav.findViewById(R.id.np_nav_pill),
+            toggle = nav.findViewById(R.id.np_nav_toggle),
+            anchor = nav.findViewById(R.id.np_nav_gallery),
+            color = 0xFFFCEDE6.toInt()
+        )
+        goo.setHorizontal(NpSettings.navHorizontal(activity))
+        nav.setTag(R.id.np_nav_goo, goo)
+        return goo
+    }
+
+    /**
+     * Fait sortir (ou rentrer) la bulle Souvenirs de « Galerie », comme une goutte.
+     * [delayMs] : à l'ouverture de l'appli, la bulle sort un instant après l'affichage.
+     */
+    fun showSouvenirBubble(activity: Activity, show: Boolean, animate: Boolean, delayMs: Long = 0L) {
+        val goo = gooOf(activity) ?: return
+        goo.setOpen(show, animate, delayMs)
     }
 
     /**
@@ -232,19 +199,25 @@ object NpNav {
         val toggle = nav.findViewById<ImageView>(R.id.np_nav_toggle)
         fun paintToggle() {
             val on = NpSettings.showJalons(activity)
-            toggle?.setBackgroundResource(if (on) R.drawable.np_nav_bubble_on_bg else R.drawable.np_nav_bubble_bg)
+            if (on) toggle?.setBackgroundResource(R.drawable.np_nav_bubble_inner) else toggle?.background = null
             toggle?.setColorFilter(if (on) 0xFFFFFFFF.toInt() else 0xFF3A3330.toInt())
         }
         paintToggle()
-        showSouvenirBubble(activity, souvenirsTab(current), animateBubble)
+        val goo = gooOf(activity)
+        if (goo != null && nav.getTag(R.id.np_nav_toggle) == null) {
+            // premier affichage : la bulle sort une seconde après l'ouverture
+            nav.setTag(R.id.np_nav_toggle, true)
+            goo.setOpen(false, false)
+            if (souvenirsTab(current)) goo.setOpen(true, true, 1000L)
+        } else {
+            showSouvenirBubble(activity, souvenirsTab(current), animateBubble)
+        }
         toggle?.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
             val on = !NpSettings.showJalons(activity)
             NpSettings.setShowJalons(activity, on)
             paintToggle()
-            it.animate().scaleX(0.85f).scaleY(0.85f).setDuration(80).withEndAction {
-                it.animate().scaleX(1f).scaleY(1f).setDuration(140).start()
-            }.start()
+            goo?.jelly()
             Toast.makeText(activity, if (on) R.string.np_jalons_shown else R.string.np_jalons_hidden, Toast.LENGTH_SHORT).show()
             onToggleJalons?.invoke()
         }
@@ -321,6 +294,7 @@ object NpNav {
                     val i = indexAt(event.x, event.y)
                     if (i != hover) {
                         hover = i
+                        // une seule vibration par entrée : en arrivant dessus, rien au relâcher
                         v.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                         paint(i)
                         showLabel(i)
@@ -336,7 +310,6 @@ object NpNav {
                     paint(-1)
                     if (i in railTabs.indices) {
                         val tab = railTabs[i]
-                        v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                         if (tab == shownTab) {
                             onReselect?.invoke()
                         } else if (onSelect?.invoke(tab) != true) {

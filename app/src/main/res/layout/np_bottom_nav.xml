@@ -32,15 +32,11 @@
             android:padding="14dp"
             android:src="@drawable/ic_np_souvenir" />
 
-        <View
-            android:id="@+id/np_nav_bridge"
-            android:layout_width="24dp"
-            android:layout_height="24dp"
-            android:layout_marginTop="-7dp"
-            android:layout_marginBottom="-7dp"
-            android:background="@drawable/np_nav_bridge"
-            android:elevation="6dp"
-            android:importantForAccessibility="no" />
+        <!-- espace entre la bulle et la barre : la jonction liquide est dessinée par NpGoo -->
+        <Space
+            android:id="@+id/np_nav_gap"
+            android:layout_width="10dp"
+            android:layout_height="10dp" />
 
         <LinearLayout
             android:id="@+id/np_nav_pill"

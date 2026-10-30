@@ -136,7 +136,12 @@ object NpJalons {
 
     /** Pour chaque photo, le souvenir auquel elle appartient. */
     fun groupsOf(context: Context, media: List<Medium>): Map<String, Cut> {
-        val cuts = all(context).sortedBy { it.taken }
+        // l'heure d'une photo peut changer légèrement entre le cache et le scan (EXIF / MediaStore) :
+        // la photo de début reprend toujours l'heure qu'elle a dans la liste affichée
+        val timeByPath = HashMap<String, Long>(media.size)
+        media.forEach { timeByPath[it.path] = timeOf(it) }
+        val cuts = all(context).map { c -> timeByPath[c.path]?.let { if (it != c.taken) c.copy(taken = it) else c } ?: c }
+            .sortedBy { it.taken }
         if (cuts.isEmpty()) return emptyMap()
         val times = LongArray(cuts.size) { cuts[it].taken }
         val result = HashMap<String, Cut>(media.size)
@@ -154,6 +159,10 @@ object NpJalons {
                     hi = mid - 1
                 }
             }
+            // à heure égale (rafale), la photo de début ouvre bien son propre souvenir
+            while (found + 1 < cuts.size && times[found + 1] == t && cuts[found].path != m.path && cuts.drop(found + 1).none { it.taken == t && it.path == m.path }) break
+            val own = cuts.indexOfFirst { it.path == m.path }
+            if (own >= 0) found = own
             if (found >= 0) result[m.path] = cuts[found]
         }
         return result

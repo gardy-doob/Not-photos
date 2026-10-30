@@ -2,4 +2,5 @@
 <resources>
     <item name="np_menu_jalon" type="id" />
     <item name="np_menu_diag" type="id" />
+    <item name="np_nav_goo" type="id" />
 </resources>
