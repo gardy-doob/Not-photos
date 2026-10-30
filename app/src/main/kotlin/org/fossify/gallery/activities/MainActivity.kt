@@ -256,7 +256,10 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
         binding.npTopButtons.npLogoText.setText(R.string.np_folders)
         binding.npTopButtons.npBurger.setOnClickListener {
             refreshMenuItems()
-            NpBurger.show(this, it, binding.mainMenu.requireToolbar().menu, listOf(NpBurger.Extra(getString(R.string.np_diag)) { org.fossify.gallery.helpers.NpDiag.share(this) }))
+            NpBurger.show(this, it, binding.mainMenu.requireToolbar().menu, listOf(
+                NpBurger.Extra(getString(R.string.np_diag)) { org.fossify.gallery.helpers.NpDiag.share(this) },
+                NpBurger.Extra(NpNav.layoutLabel(this)) { NpNav.pickLayout(this) {} }
+            ))
         }
 
         npFoldersMode = intent.getStringExtra(NP_TAB) == NP_TAB_FOLDERS
@@ -266,6 +269,7 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
             NpNav.setup(this, NP_TAB_FOLDERS, onReselect = { binding.directoriesGrid.smoothScrollToPosition(0) })
         }
 
+        org.fossify.gallery.helpers.NpScrollUi.attach(binding.directoriesGrid, binding.npTopButtons.npBrand, null, null)
         binding.directoriesRefreshLayout.setOnRefreshListener { getDirectories() }
         storeStateVariables()
         checkWhatsNewDialog()
@@ -317,6 +321,7 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
 
     override fun onResume() {
         super.onResume()
+        NpNav.applyLayout(this)
         updateMenuColors()
         config.isThirdPartyIntent = false
         mDateFormat = config.dateFormat

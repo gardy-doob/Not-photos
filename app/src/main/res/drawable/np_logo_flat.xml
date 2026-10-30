@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Logo Aurora, flat : une aurore au-dessus de deux montagnes -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="32dp" android:height="32dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:pathData="M54,0 A54,54 0 1,1 53.99,0 Z" android:fillColor="#FFF2645E" />
+    <group>
+        <path android:pathData="M26,48 Q40,34 54,44 T82,40" android:strokeColor="#FFFFD2BF" android:strokeWidth="7" android:strokeLineCap="round" android:fillColor="#00000000" />
+        <path android:pathData="M24,80 L44,56 Q47,52.5 50,56 L58,66 L64,59 Q67,55.5 70,59 L84,80 Z" android:fillColor="#FFFFFFFF" android:strokeColor="#FFFFFFFF" android:strokeWidth="4" android:strokeLineJoin="round" />
+    </group>
+</vector>

@@ -10,26 +10,33 @@
     android:paddingTop="8dp"
     android:paddingEnd="12dp">
 
-    <ImageView
-        android:id="@+id/np_logo"
-        android:layout_width="30dp"
-        android:layout_height="30dp"
-        android:background="@drawable/np_logo_bg"
-        android:importantForAccessibility="no"
-        android:scaleType="centerCrop"
-        android:src="@drawable/ic_launcher_foreground" />
-
-    <TextView
-        android:id="@+id/np_logo_text"
+    <LinearLayout
+        android:id="@+id/np_brand"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="10dp"
         android:layout_weight="1"
-        android:fontFamily="sans-serif-medium"
-        android:letterSpacing="0.02"
-        android:text="@string/np_brand"
-        android:textColor="#FF3A3330"
-        android:textSize="21sp" />
+        android:gravity="center_vertical|start"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:id="@+id/np_logo"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/np_logo_flat" />
+
+        <TextView
+            android:id="@+id/np_logo_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:ellipsize="end"
+            android:fontFamily="sans-serif-medium"
+            android:maxLines="1"
+            android:text="@string/np_brand"
+            android:textColor="#FF3A3330"
+            android:textSize="21sp" />
+    </LinearLayout>
 
     <ImageView
         android:id="@+id/np_video_filter"

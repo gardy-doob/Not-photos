@@ -91,9 +91,33 @@
     <include
         android:id="@+id/np_top_buttons"
         layout="@layout/np_top_buttons"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_gravity="top|end" />
+        android:layout_gravity="top" />
+
+    <!-- pastille de date pendant le défilement (Google Photos) -->
+    <FrameLayout
+        android:id="@+id/np_date_holder"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top">
+
+        <TextView
+            android:id="@+id/np_date_pill"
+            android:layout_width="wrap_content"
+            android:layout_height="38dp"
+            android:layout_gravity="top|center_horizontal"
+            android:layout_marginTop="11dp"
+            android:background="@drawable/np_date_pill_bg"
+            android:elevation="6dp"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="center"
+            android:paddingStart="18dp"
+            android:paddingEnd="18dp"
+            android:textColor="#FF1F1B19"
+            android:textSize="15sp"
+            android:visibility="invisible" />
+    </FrameLayout>
 
     <include
         android:id="@+id/np_souvenir_bar"

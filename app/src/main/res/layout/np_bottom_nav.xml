@@ -7,6 +7,7 @@
     android:clipChildren="false"
     android:clipToPadding="false">
 
+    <!-- orientation et marges réglées dans NpNav selon le choix vertical / horizontal -->
     <LinearLayout
         android:id="@+id/np_nav_column"
         android:layout_width="wrap_content"
@@ -14,14 +15,16 @@
         android:layout_gravity="end|bottom"
         android:layout_marginStart="140dp"
         android:clipChildren="false"
-        android:gravity="center_horizontal"
+        android:clipToPadding="false"
+        android:gravity="center"
         android:orientation="vertical">
 
+        <!-- bulle Souvenirs, reliée à « Galerie » par un col -->
         <ImageView
             android:id="@+id/np_nav_toggle"
-            android:layout_width="52dp"
-            android:layout_height="52dp"
-            android:background="@drawable/np_round_bg"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
+            android:background="@drawable/np_nav_bubble_bg"
             android:clickable="true"
             android:contentDescription="@string/np_toggle_jalons"
             android:elevation="6dp"
@@ -29,16 +32,25 @@
             android:padding="14dp"
             android:src="@drawable/ic_np_souvenir" />
 
+        <View
+            android:id="@+id/np_nav_bridge"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginTop="-7dp"
+            android:layout_marginBottom="-7dp"
+            android:background="@drawable/np_nav_bridge"
+            android:elevation="6dp"
+            android:importantForAccessibility="no" />
+
         <LinearLayout
             android:id="@+id/np_nav_pill"
             android:layout_width="56dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
             android:background="@drawable/np_rail_bg"
             android:elevation="6dp"
+            android:gravity="center"
             android:orientation="vertical"
-            android:paddingTop="4dp"
-            android:paddingBottom="4dp">
+            android:padding="4dp">
 
             <ImageView android:id="@+id/np_nav_gallery" style="@style/NpRailItem" android:contentDescription="@string/np_gallery" android:src="@drawable/ic_np_gallery" />
             <ImageView android:id="@+id/np_nav_jalons" style="@style/NpRailItem" android:contentDescription="@string/np_jalons" android:src="@drawable/ic_np_albums" />

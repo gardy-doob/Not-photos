@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Col « gooey » entre la bulle Souvenirs et la barre : bords concaves comme deux gouttes qui se rejoignent -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M0,0 H24 C15,7 15,17 24,24 H0 C9,17 9,7 0,0 Z" android:fillColor="#FFFCEDE6" />
+</vector>

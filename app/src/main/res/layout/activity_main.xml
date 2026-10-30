@@ -90,9 +90,9 @@
     <include
         android:id="@+id/np_top_buttons"
         layout="@layout/np_top_buttons"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_gravity="top|end" />
+        android:layout_gravity="top" />
 
     <include
         android:id="@+id/np_nav"

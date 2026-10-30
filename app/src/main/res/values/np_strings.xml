@@ -47,4 +47,7 @@
     <string name="np_photos_videos">Photos et vidéos</string>
     <string name="np_unsorted">À classer</string>
     <string name="np_souvenir_exists">Un souvenir commence déjà à cette photo</string>
+    <string name="np_nav_style">Barre de navigation</string>
+    <string name="np_nav_vertical">Verticale</string>
+    <string name="np_nav_horizontal">Horizontale</string>
 </resources>

@@ -300,6 +300,8 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
                 findItem(R.id.menu_edit).isVisible = visibleBottomActions and BOTTOM_ACTION_EDIT == 0 && !currentMedium.isSVG()
                 findItem(R.id.menu_rename).isVisible = visibleBottomActions and BOTTOM_ACTION_RENAME == 0 && !currentMedium.getIsInRecycleBin()
                 findItem(R.id.menu_rotate).isVisible = currentMedium.isImage() && visibleBottomActions and BOTTOM_ACTION_ROTATE == 0
+                // souvenirs : seulement depuis la Galerie (photos ou vidéos)
+                findItem(R.id.np_menu_jalon)?.isVisible = npTab == org.fossify.gallery.helpers.NP_TAB_GALLERY || npTab == org.fossify.gallery.helpers.NP_TAB_VIDEOS
                 findItem(R.id.menu_set_as).isVisible = visibleBottomActions and BOTTOM_ACTION_SET_AS == 0
                 findItem(R.id.menu_copy_to_clipboard).isVisible = currentMedium.isImage()
                 findItem(R.id.menu_copy_to).isVisible = visibleBottomActions and BOTTOM_ACTION_COPY == 0

@@ -210,7 +210,7 @@ open class MediaActivity : SimpleActivity(), MediaOperationsListener {
         // Aura : interface plein écran, sans barre du haut ; les options passent dans le menu burger
         binding.mediaMenu.beGone()
         setupEdgeToEdge(
-            padTopSystem = listOf(binding.mediaGrid, binding.npTopButtons.root, binding.npStatusScrim),
+            padTopSystem = listOf(binding.mediaGrid, binding.npTopButtons.root, binding.npStatusScrim, binding.npDateHolder),
             padBottomImeAndSystem = listOf(binding.mediaGrid),
             moveBottomSystem = listOf(binding.npNav.root, binding.npSouvenirBar.root)
         )
@@ -250,6 +250,7 @@ open class MediaActivity : SimpleActivity(), MediaOperationsListener {
 
     override fun onResume() {
         super.onResume()
+        NpNav.applyLayout(this)
         updateMenuColors()
         val npStyle = NpSettings.style(this)
         if (npLastStyle != -1 && npLastStyle != npStyle) {
@@ -606,7 +607,8 @@ open class MediaActivity : SimpleActivity(), MediaOperationsListener {
         NpDiag.mark("retour onglet $tab")
     }
 
-    fun npJalonsActive() = npTab != NP_TAB_VIDEOS && !(mIsGetImageIntent || mIsGetVideoIntent || mIsGetAnyIntent)
+    /** Les souvenirs n'existent que dans la Galerie (photos) et son filtre Vidéos. */
+    fun npJalonsActive() = npForceShowAll && NpNav.souvenirsTab(npTab) && !(mIsGetImageIntent || mIsGetVideoIntent || mIsGetAnyIntent)
 
     private fun npShowJalons() = npJalonsActive() && NpSettings.showJalons(this)
 
@@ -666,11 +668,12 @@ open class MediaActivity : SimpleActivity(), MediaOperationsListener {
         }.start()
     }
 
-    private fun npSetupNav() {
+    private fun npSetupNav(animateBubble: Boolean = false) {
         npPaintHeader()
         NpNav.setup(
             activity = this,
             current = npTab,
+            animateBubble = animateBubble,
             onReselect = { binding.mediaGrid.smoothScrollToPosition(0) },
             onSelect = { tab -> npSwitchInPlace(tab) },
             onToggleJalons = {
@@ -691,13 +694,34 @@ open class MediaActivity : SimpleActivity(), MediaOperationsListener {
         npFocusCut = null
         npCancelPending()
         if (wasSouvenir != npSouvenirLayout()) setupLayoutManager()
-        npSetupNav()
+        npSetupNav(animateBubble = true)
         npApplyGridStyle()
+        org.fossify.gallery.helpers.NpScrollUi.resetBrand(binding.npTopButtons.npBrand)
         if (needsReload) {
-            npCascadePending = true
-            mLoadedInitialPhotos = false
-            mIsGettingMedia = false
-            getMedia()
+            val cached = npCache[npScope()]
+            if (cached != null) {
+                // liste déjà prête (préchargée en arrière-plan) : bascule immédiate
+                NpDiag.mark("bascule instantanée ${npScope()} ${cached.size}")
+                npRawMedia = cached
+                mMedia = npDecorate(cached)
+                getMediaAdapter()?.let {
+                    it.media = mMedia.clone() as ArrayList<ThumbnailItem>
+                    it.notifyDataSetChanged()
+                }
+                binding.mediaGrid.invalidateItemDecorations()
+                npCascadePending = true
+                npCascade()
+                // rafraîchissement discret seulement si la liste date un peu
+                if (System.currentTimeMillis() - (npCacheTime[npScope()] ?: 0L) > 60_000L) {
+                    mIsGettingMedia = false
+                    startAsyncTask()
+                }
+            } else {
+                npCascadePending = true
+                mLoadedInitialPhotos = false
+                mIsGettingMedia = false
+                getMedia()
+            }
         } else {
             npRefreshJalons()
         }
@@ -728,6 +752,59 @@ open class MediaActivity : SimpleActivity(), MediaOperationsListener {
             )
         )
         npApplyGridStyle()
+        org.fossify.gallery.helpers.NpScrollUi.attach(
+            binding.mediaGrid,
+            binding.npTopButtons.npBrand,
+            binding.npDatePill
+        ) { position -> npDateAt(position) }
+    }
+
+    /** Date de la première photo visible à partir de cette position (pour la pastille de défilement). */
+    private fun npDateAt(position: Int): Long? {
+        val media = getMediaAdapter()?.media ?: return null
+        for (i in position until minOf(media.size, position + 40)) {
+            val m = media[i] as? Medium ?: continue
+            return if (m.taken > 0) m.taken else m.modified
+        }
+        return null
+    }
+
+    /** Listes brutes déjà chargées, par portée (« gallery » ou « all ») : la bascule Galerie ↔ Toutes est immédiate. */
+    private val npCache = java.util.concurrent.ConcurrentHashMap<String, ArrayList<ThumbnailItem>>()
+    private val npCacheTime = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    private var npPrefetching = false
+
+    private fun npScope() = if (npFoldersFilter() == null) "all" else "gallery"
+
+    /** Une fois la Galerie affichée, prépare « Toutes » en arrière-plan (et inversement). */
+    private fun npPrefetchOther() {
+        if (!npForceShowAll || npPrefetching) return
+        val other = if (npScope() == "all") "gallery" else "all"
+        if (npCache[other] != null) return
+        npPrefetching = true
+        val folders = if (other == "all") null else org.fossify.gallery.helpers.NpGallery.folders(this)
+        NpDiag.mark("préchargement $other")
+        getCachedMedia(mPath, false, false, folders) { cached ->
+            if (cached.isNotEmpty() && npCache[other] == null) {
+                npCache[other] = cached
+                NpDiag.mark("préchargement $other cache ${cached.size}")
+            }
+            runOnUiThread {
+                GetMediaAsynctask(
+                    context = applicationContext,
+                    mPath = mPath,
+                    isPickImage = false,
+                    isPickVideo = false,
+                    showAll = mShowAll,
+                    onlyFolders = folders
+                ) { scanned ->
+                    npCache[other] = scanned
+                    npCacheTime[other] = System.currentTimeMillis()
+                    npPrefetching = false
+                    NpDiag.mark("préchargement $other scan ${scanned.size}")
+                }.execute()
+            }
+        }
     }
 
     /** Marges, fond et colonnes de la grille selon l'affichage des souvenirs. */
@@ -877,6 +954,7 @@ open class MediaActivity : SimpleActivity(), MediaOperationsListener {
         val style = NpSettings.style(this)
         val extras = arrayListOf(
             NpBurger.Extra(getString(R.string.np_diag)) { NpDiag.share(this) },
+            NpBurger.Extra(NpNav.layoutLabel(this)) { NpNav.pickLayout(this) { npSetupNav() } },
             NpBurger.Extra(
                 getString(R.string.np_jalon_style) + " : " +
                     getString(if (style == NpSettings.STYLE_CARDS) R.string.np_jalon_style_cards else R.string.np_jalon_style_timeline)
@@ -1156,6 +1234,7 @@ open class MediaActivity : SimpleActivity(), MediaOperationsListener {
 
     private fun startAsyncTask() {
         NpDiag.mark("scan:start ${npTab}")
+        val scope = npScope()
         mCurrAsyncTask?.stopFetching()
         mCurrAsyncTask = GetMediaAsynctask(
             context = applicationContext,
@@ -1167,13 +1246,22 @@ open class MediaActivity : SimpleActivity(), MediaOperationsListener {
         ) {
             NpDiag.mark("scan:done ${it.size}")
             ensureBackgroundThread {
-                val oldMedia = mMedia.clone() as ArrayList<ThumbnailItem>
+                if (scope != npScope()) {
+                    // l'onglet a changé pendant le scan : on garde la liste pour plus tard sans l'afficher
+                    npCache[scope] = it
+                    npCacheTime[scope] = System.currentTimeMillis()
+                    mIsGettingMedia = false
+                    return@ensureBackgroundThread
+                }
+                val oldMedia = (npCache[scope] ?: mMedia).clone() as ArrayList<ThumbnailItem>
                 val newMedia = it
                 try {
                     gotMedia(newMedia, false)
+                    npCacheTime[scope] = System.currentTimeMillis()
+                    runOnUiThread { npPrefetchOther() }
 
                     // remove cached files that are no longer valid for whatever reason
-                    val newPaths = newMedia.mapNotNull { it as? Medium }.map { it.path }
+                    val newPaths = newMedia.mapNotNull { it as? Medium }.map { it.path }.toHashSet()
                     oldMedia
                         .mapNotNull { it as? Medium }
                         .filter { !newPaths.contains(it.path) }
@@ -1477,6 +1565,7 @@ open class MediaActivity : SimpleActivity(), MediaOperationsListener {
         mIsGettingMedia = false
         checkLastMediaChanged()
         npRawMedia = media
+        npCache[npScope()] = media
         mMedia = npDecorate(media)
 
         runOnUiThread {

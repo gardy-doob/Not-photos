@@ -49,6 +49,7 @@ class JalonsActivity : SimpleActivity() {
 
     override fun onResume() {
         super.onResume()
+        NpNav.applyLayout(this)
         refresh()
     }
 

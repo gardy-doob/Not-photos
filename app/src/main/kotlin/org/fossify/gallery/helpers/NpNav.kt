@@ -87,9 +87,134 @@ object NpNav {
         }
     )
 
+    /** Onglets où les Souvenirs existent : la Galerie (photos) et son filtre Vidéos. */
+    fun souvenirsTab(tab: String) = tab == NP_TAB_GALLERY || tab == NP_TAB_VIDEOS
+
     /**
-     * Barre verticale sous le pouce : des icônes seules ; en posant le doigt, le nom de la vue
-     * apparaît à gauche et on peut glisser pour en choisir une autre, puis relâcher.
+     * Place la barre selon le réglage : verticale à droite, un peu au-dessus du milieu bas de l'écran
+     * (sous le pouce), ou horizontale centrée en bas.
+     */
+    fun applyLayout(activity: Activity) {
+        val nav = activity.findViewById<View>(R.id.np_nav) ?: return
+        val column = nav.findViewById<android.widget.LinearLayout>(R.id.np_nav_column) ?: return
+        val pill = nav.findViewById<android.widget.LinearLayout>(R.id.np_nav_pill) ?: return
+        val bridge = nav.findViewById<View>(R.id.np_nav_bridge)
+        val label = nav.findViewById<View>(R.id.np_nav_label)
+        val density = activity.resources.displayMetrics.density
+        fun dp(v: Int) = (v * density).toInt()
+        val horizontal = NpSettings.navHorizontal(activity)
+        val orientation = if (horizontal) android.widget.LinearLayout.HORIZONTAL else android.widget.LinearLayout.VERTICAL
+
+        column.orientation = orientation
+        pill.orientation = orientation
+        (column.layoutParams as? android.widget.FrameLayout.LayoutParams)?.let {
+            if (horizontal) {
+                it.gravity = android.view.Gravity.BOTTOM or android.view.Gravity.CENTER_HORIZONTAL
+                it.marginStart = 0
+                it.topMargin = dp(48)
+                it.bottomMargin = 0
+            } else {
+                it.gravity = android.view.Gravity.BOTTOM or android.view.Gravity.END
+                it.marginStart = dp(140)
+                it.topMargin = 0
+                // plus haut que le bas de l'écran : à hauteur du pouce
+                it.bottomMargin = (activity.resources.displayMetrics.heightPixels * 0.16f).toInt()
+            }
+            column.layoutParams = it
+        }
+        pill.layoutParams = pill.layoutParams.apply {
+            width = if (horizontal) android.view.ViewGroup.LayoutParams.WRAP_CONTENT else dp(56)
+            height = if (horizontal) dp(56) else android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+        }
+        for (i in 0 until pill.childCount) {
+            val item = pill.getChildAt(i)
+            (item.layoutParams as? android.widget.LinearLayout.LayoutParams)?.let {
+                it.gravity = android.view.Gravity.CENTER
+                if (horizontal) it.setMargins(dp(2), 0, dp(2), 0) else it.setMargins(0, dp(2), 0, dp(2))
+                item.layoutParams = it
+            }
+        }
+        bridge?.let { b ->
+            (b.layoutParams as? android.widget.LinearLayout.LayoutParams)?.let {
+                if (horizontal) it.setMargins(dp(-7), 0, dp(-7), 0) else it.setMargins(0, dp(-7), 0, dp(-7))
+                b.layoutParams = it
+            }
+            // le col est dessiné vertical : on le tourne pour relier la bulle par la gauche
+            b.rotation = if (horizontal) -90f else 0f
+            b.outlineProvider = null
+        }
+        (label?.layoutParams as? android.widget.FrameLayout.LayoutParams)?.let {
+            it.gravity = if (horizontal) android.view.Gravity.TOP or android.view.Gravity.START else android.view.Gravity.TOP or android.view.Gravity.END
+            it.marginEnd = if (horizontal) 0 else dp(68)
+            label.layoutParams = it
+        }
+        (nav.layoutParams as? androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams)?.let {
+            it.gravity = if (horizontal) android.view.Gravity.BOTTOM or android.view.Gravity.CENTER_HORIZONTAL else android.view.Gravity.BOTTOM or android.view.Gravity.END
+            it.marginEnd = if (horizontal) 0 else dp(12)
+            nav.layoutParams = it
+        }
+    }
+
+    /** Fait apparaître (ou rentrer) la bulle Souvenirs, comme une goutte qui sort de « Galerie ». */
+    fun showSouvenirBubble(activity: Activity, show: Boolean, animate: Boolean) {
+        val nav = activity.findViewById<View>(R.id.np_nav) ?: return
+        val toggle = nav.findViewById<View>(R.id.np_nav_toggle) ?: return
+        val bridge = nav.findViewById<View>(R.id.np_nav_bridge) ?: return
+        val horizontal = NpSettings.navHorizontal(activity)
+        val shown = toggle.visibility == View.VISIBLE && toggle.tag != "hiding"
+        if (show == shown && toggle.tag != "hiding") return
+        val distance = 44 * activity.resources.displayMetrics.density
+        toggle.animate().cancel()
+        bridge.animate().cancel()
+        // le col pousse depuis la barre : pivot du côté de « Galerie »
+        bridge.pivotX = bridge.width / 2f
+        bridge.pivotY = if (bridge.height > 0) bridge.height.toFloat() else 24 * activity.resources.displayMetrics.density
+        if (!animate) {
+            toggle.tag = null
+            toggle.visibility = if (show) View.VISIBLE else View.INVISIBLE
+            bridge.visibility = toggle.visibility
+            toggle.alpha = 1f; toggle.scaleX = 1f; toggle.scaleY = 1f; toggle.translationX = 0f; toggle.translationY = 0f
+            bridge.alpha = 1f; bridge.scaleY = 1f
+            return
+        }
+        if (show) {
+            toggle.tag = null
+            toggle.visibility = View.VISIBLE
+            bridge.visibility = View.VISIBLE
+            toggle.alpha = 0f
+            toggle.scaleX = 0.3f
+            toggle.scaleY = 0.3f
+            if (horizontal) toggle.translationX = distance else toggle.translationY = distance
+            bridge.scaleY = 0f
+            bridge.alpha = 1f
+            bridge.animate().scaleY(1f).setDuration(260).setInterpolator(android.view.animation.DecelerateInterpolator()).start()
+            toggle.animate().alpha(1f).scaleX(1f).scaleY(1f).translationX(0f).translationY(0f)
+                .setDuration(420).setStartDelay(40)
+                .setInterpolator(android.view.animation.OvershootInterpolator(2.2f))
+                .withEndAction(null)
+                .start()
+        } else {
+            toggle.tag = "hiding"
+            val anim = toggle.animate().alpha(0f).scaleX(0.3f).scaleY(0.3f)
+            if (horizontal) anim.translationX(distance) else anim.translationY(distance)
+            anim.setDuration(260).setStartDelay(0)
+                .setInterpolator(android.view.animation.AnticipateInterpolator(1.4f))
+                .withEndAction {
+                    toggle.visibility = View.INVISIBLE
+                    toggle.tag = null
+                    toggle.translationX = 0f
+                    toggle.translationY = 0f
+                }
+                .start()
+            bridge.animate().scaleY(0f).setDuration(220).setStartDelay(120)
+                .withEndAction { bridge.visibility = View.INVISIBLE }
+                .start()
+        }
+    }
+
+    /**
+     * Barre sous le pouce : des icônes seules ; en posant le doigt, le nom de la vue apparaît
+     * (à gauche, ou au-dessus en horizontal) et on peut glisser pour en choisir une autre, puis relâcher.
      */
     @android.annotation.SuppressLint("ClickableViewAccessibility")
     fun setup(
@@ -97,19 +222,22 @@ object NpNav {
         current: String,
         onReselect: (() -> Unit)? = null,
         onSelect: ((String) -> Boolean)? = null,
-        onToggleJalons: (() -> Unit)? = null
+        onToggleJalons: (() -> Unit)? = null,
+        animateBubble: Boolean = false
     ) {
         val nav = activity.findViewById<View>(R.id.np_nav) ?: return
+        applyLayout(activity)
         val shownTab = if (current == NP_TAB_VIDEOS) NP_TAB_GALLERY else current
 
-        // bouton Souvenirs : en négatif quand le mode est actif
+        // bulle Souvenirs : en négatif quand le mode est actif, seulement dans la Galerie
         val toggle = nav.findViewById<ImageView>(R.id.np_nav_toggle)
         fun paintToggle() {
             val on = NpSettings.showJalons(activity)
-            toggle?.setBackgroundResource(if (on) R.drawable.np_round_negative_bg else R.drawable.np_round_bg)
+            toggle?.setBackgroundResource(if (on) R.drawable.np_nav_bubble_on_bg else R.drawable.np_nav_bubble_bg)
             toggle?.setColorFilter(if (on) 0xFFFFFFFF.toInt() else 0xFF3A3330.toInt())
         }
         paintToggle()
+        showSouvenirBubble(activity, souvenirsTab(current), animateBubble)
         toggle?.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
             val on = !NpSettings.showJalons(activity)
@@ -149,8 +277,11 @@ object NpNav {
         }
         paint(-1)
 
-        fun indexAt(y: Float): Int {
-            items.forEachIndexed { i, v -> if (v != null && y < v.bottom + 2) return i }
+        fun indexAt(x: Float, y: Float): Int {
+            val horizontal = NpSettings.navHorizontal(activity)
+            items.forEachIndexed { i, v ->
+                if (v != null && (if (horizontal) x < v.right + 2 else y < v.bottom + 2)) return i
+            }
             return items.lastIndex
         }
 
@@ -160,15 +291,24 @@ object NpNav {
             label.text = railLabel(activity, railTabs[i])
             val pillLoc = IntArray(2).also { pill.getLocationInWindow(it) }
             val navLoc = IntArray(2).also { nav.getLocationInWindow(it) }
-            val centerY = pillLoc[1] - navLoc[1] + icon.top + icon.height / 2f
             if (label.visibility != View.VISIBLE) {
                 label.alpha = 0f
-                label.translationX = 12f * activity.resources.displayMetrics.density
                 label.visibility = View.VISIBLE
-                label.animate().alpha(1f).translationX(0f).setDuration(120).start()
+                label.animate().alpha(1f).setDuration(120).start()
             }
-            label.post { label.translationY = centerY - label.height / 2f }
-            label.translationY = centerY - (if (label.height > 0) label.height else 0) / 2f
+            fun place() {
+                if (NpSettings.navHorizontal(activity)) {
+                    val centerX = pillLoc[0] - navLoc[0] + icon.left + icon.width / 2f
+                    label.translationY = 0f
+                    label.translationX = (centerX - label.width / 2f).coerceAtLeast(0f)
+                } else {
+                    val centerY = pillLoc[1] - navLoc[1] + icon.top + icon.height / 2f
+                    label.translationX = 0f
+                    label.translationY = centerY - label.height / 2f
+                }
+            }
+            place()
+            label.post { place() }
         }
 
         fun hideLabel() {
@@ -179,7 +319,7 @@ object NpNav {
         pill.setOnTouchListener { v, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
-                    val i = indexAt(event.y)
+                    val i = indexAt(event.x, event.y)
                     if (i != hover) {
                         hover = i
                         v.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
@@ -218,6 +358,23 @@ object NpNav {
             }
         }
     }
+
+    /** Choix vertical / horizontal depuis le menu burger. */
+    fun pickLayout(activity: Activity, onChanged: () -> Unit) {
+        val labels = arrayOf(activity.getString(R.string.np_nav_vertical), activity.getString(R.string.np_nav_horizontal))
+        androidx.appcompat.app.AlertDialog.Builder(activity)
+            .setTitle(R.string.np_nav_style)
+            .setSingleChoiceItems(labels, if (NpSettings.navHorizontal(activity)) 1 else 0) { dialog, which ->
+                NpSettings.setNavHorizontal(activity, which == 1)
+                dialog.dismiss()
+                applyLayout(activity)
+                onChanged()
+            }
+            .show()
+    }
+
+    fun layoutLabel(activity: Activity) = activity.getString(R.string.np_nav_style) + " : " +
+        activity.getString(if (NpSettings.navHorizontal(activity)) R.string.np_nav_horizontal else R.string.np_nav_vertical)
 
     fun hide(activity: Activity) {
         activity.findViewById<View>(R.id.np_nav)?.visibility = View.GONE
