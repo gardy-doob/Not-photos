@@ -36,6 +36,8 @@ dtapid() { local p; p=$(center "$1" "${2:-1}"); if [ -n "$p" ]; then adb shell i
 adb logcat -c
 adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null
 sleep 20; shot 1-galerie; step lancement
+adb shell uiautomator dump /sdcard/u.xml >/dev/null 2>&1; adb pull /sdcard/u.xml u0.xml >/dev/null 2>&1
+grep -q "aerr_" u0.xml && echo "::warning::Boîte « ne répond pas » au lancement : $(grep -o 'text="[^"]*"' u0.xml | head -4 | tr '\n' ' ')"
 dtapid medium_thumbnail 4; sleep 3; shot 2-souvenir; step souvenir
 tapid medium_thumbnail 8; sleep 5; shot 4-visionneuse; step visionneuse
 adb shell input swipe 540 1500 540 500 180; sleep 3; shot 5-infos; step infos
@@ -46,6 +48,17 @@ for t in np_video_filter np_video_filter np_nav_jalons np_nav_gallery np_nav_all
 shot 7-onglets; step onglets
 tapid np_burger; sleep 2; shot 8-burger; adb shell input keyevent KEYCODE_BACK; sleep 1
 adb logcat -d > logcat.txt
+# blocage (ANR) : quel processus, et où le fil principal est bloqué
+if grep -q "ANR in" logcat.txt; then
+  echo "::warning::$(grep -m3 -A6 'ANR in' logcat.txt | tr '\n' '|' | cut -c1-900)"
+  adb root >/dev/null 2>&1; sleep 3
+  mkdir -p anr; adb pull /data/anr anr >/dev/null 2>&1
+  F=$(grep -rl "$PKG" anr 2>/dev/null | head -1)
+  if [ -n "$F" ]; then
+    STACK=$(awk '/^"main"/{f=1} f{print} f&&/^$/{exit}' "$F" | head -45 | tr '\n' '|' | sed 's/%/%25/g' | cut -c1-3500)
+    echo "::error::BLOCAGE fil principal : $STACK"
+  fi
+fi
 echo "::notice::Activités$STATES"
 [ -n "$MISSING" ] && echo "::warning::Introuvables :$MISSING (vues : $(grep -o 'resource-id="[^"]*:id/[a-z_]*' u.xml | sed 's/.*:id\///' | sort | uniq -c | sort -rn | head -12 | tr '\n' ' '))"
 if grep -q "FATAL EXCEPTION" logcat.txt; then
