@@ -133,10 +133,13 @@ object NpNav {
                 item.layoutParams = it
             }
         }
-        // marge autour de la barre : le flou de l'effet liquide ne doit pas être coupé au bord
+        // marge autour de la barre : le flou de l'effet liquide est calculé dans les limites de la vue,
+        // sans cette marge la bulle était rasée en haut (et son ombre en bas) pendant toute l'animation
         (column.layoutParams as? android.widget.FrameLayout.LayoutParams)?.let {
-            it.marginEnd = dp(12)
-            if (horizontal) it.marginStart = dp(12)
+            it.marginEnd = dp(16)
+            if (horizontal) it.marginStart = dp(16)
+            it.topMargin = if (horizontal) dp(48) else dp(28)
+            it.bottomMargin = (if (horizontal) 0 else (activity.resources.displayMetrics.heightPixels * 0.16f).toInt()) + dp(12)
             column.layoutParams = it
         }
         NpGoo.of(nav)?.setHorizontal(horizontal)

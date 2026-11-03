@@ -107,7 +107,7 @@ class NpGoo(
 
     /** Appui sur la bulle déjà sortie : impulsion sur le rayon (effet gelée). */
     fun jelly() {
-        vr -= 260f
+        vr -= 190f
         kick()
     }
 
@@ -163,15 +163,17 @@ class NpGoo(
         val (bx, by) = pointAt(x)
         val (ox, oy) = openCenter()
         val p = if (d > 0f) (x / d).coerceIn(0f, 1f) else 0f
-        val vis = ((radius - 18f) / 7f).coerceIn(0f, 1f)
+        // le picto n'apparaît qu'une fois la goutte sortie de la barre (plus de la moitié du trajet),
+        // en fondu, et suit simplement la taille de la bulle : pas de rotation ni de saut d'échelle
+        val vis = ((p - 0.55f) / 0.3f).coerceIn(0f, 1f) * ((radius - 14f) / 6f).coerceIn(0f, 1f)
         toggle.translationX = bx - ox
         toggle.translationY = by - oy
-        val scale = (0.4f + 0.6f * vis) * (radius / max(openR, 1f)).coerceIn(0.5f, 1.3f)
+        val scale = (radius / max(openR, 1f)).coerceIn(0.6f, 1.15f)
         toggle.scaleX = scale
         toggle.scaleY = scale
-        toggle.rotation = (1 - p) * -90f
+        toggle.rotation = 0f
         toggle.alpha = vis
-        toggle.isClickable = vis > 0.6f
+        toggle.isClickable = open && vis > 0.6f
         toggle.visibility = if (vis > 0.01f) View.VISIBLE else View.INVISIBLE
         goo.invalidate()
         shadow.invalidate()

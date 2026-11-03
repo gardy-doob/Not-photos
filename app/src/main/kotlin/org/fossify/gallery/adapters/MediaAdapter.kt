@@ -705,12 +705,53 @@ class MediaAdapter(
 
     fun updateMedia(newMedia: ArrayList<ThumbnailItem>) {
         val thumbnailItems = newMedia.clone() as ArrayList<ThumbnailItem>
-        if (thumbnailItems.hashCode() != currentMediaHash) {
-            currentMediaHash = thumbnailItems.hashCode()
+        if (thumbnailItems.hashCode() == currentMediaHash) return
+        currentMediaHash = thumbnailItems.hashCode()
+        val old = media
+        // Aurora : le scan complet qui suit le cache renvoie (presque) la même liste, avec d'autres identifiants
+        // internes. Avant, tout était redessiné d'un coup (toutes les vignettes clignotaient 1 à 2 s après
+        // l'ouverture). On ne touche maintenant qu'aux cases qui changent vraiment.
+        if (npSameOnScreen(old, thumbnailItems)) {
+            media = thumbnailItems
+            return
+        }
+        val souvenir = (activity as? MediaActivity)?.npSouvenirLayout() == true
+        if (souvenir || old.isEmpty() || thumbnailItems.isEmpty()) {
+            // en mode Souvenirs la taille des cases dépend de leur position : il faut tout reposer
             media = thumbnailItems
             notifyDataSetChanged()
-            finishActMode()
+        } else {
+            val diff = androidx.recyclerview.widget.DiffUtil.calculateDiff(object : androidx.recyclerview.widget.DiffUtil.Callback() {
+                override fun getOldListSize() = old.size
+                override fun getNewListSize() = thumbnailItems.size
+                override fun areItemsTheSame(a: Int, b: Int) = npSameItem(old[a], thumbnailItems[b])
+                override fun areContentsTheSame(a: Int, b: Int) = npSameContent(old[a], thumbnailItems[b])
+            }, false)
+            media = thumbnailItems
+            diff.dispatchUpdatesTo(this)
         }
+        finishActMode()
+    }
+
+    private fun npSameItem(a: ThumbnailItem, b: ThumbnailItem): Boolean = when {
+        a is Medium && b is Medium -> a.path == b.path
+        a is ThumbnailSection && b is ThumbnailSection -> a.title == b.title
+        else -> false
+    }
+
+    /** Ce qui compte pour l'affichage d'une case (pas l'identifiant de base ni la position). */
+    private fun npSameContent(a: ThumbnailItem, b: ThumbnailItem): Boolean = when {
+        a is Medium && b is Medium -> a.path == b.path && a.name == b.name && a.type == b.type &&
+            a.modified == b.modified && a.size == b.size && a.videoDuration == b.videoDuration &&
+            a.isFavorite == b.isFavorite && a.deletedTS == b.deletedTS
+        a is ThumbnailSection && b is ThumbnailSection -> a.title == b.title
+        else -> false
+    }
+
+    private fun npSameOnScreen(a: List<ThumbnailItem>, b: List<ThumbnailItem>): Boolean {
+        if (a.size != b.size) return false
+        for (i in a.indices) if (!npSameContent(a[i], b[i])) return false
+        return true
     }
 
     fun updateDisplayFilenames(displayFilenames: Boolean) {
